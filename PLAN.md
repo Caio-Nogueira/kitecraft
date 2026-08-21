@@ -1,0 +1,111 @@
+# KiteCraft — Minecraft server on Cloudflare Workers + Durable Objects
+
+A Minecraft Java Edition server that runs entirely on Cloudflare Workers, using
+Durable Objects for stateful game logic and WebSocket transport via [wsmc]
+(one packet per WS binary message).
+
+## Locked decisions
+
+- **Strategy**: new workspace; reuse Pumpkin's portable crates from a pinned fork.
+- **MVP milestone**: "walkable world" — login/ping over WS, superflat worldgen,
+  block place/break, chat, movement sync, chunk persistence.
+- **Auth**: offline mode (offline UUIDs; no Mojang session validation).
+- **Topology**: one Durable Object = one server instance (`idFromName("primary")`).
+- **Platform**: Workers Paid required (free tier's 10 ms CPU/invocation cannot
+  sustain gameplay bursts; paid gives 30 s CPU per invocation by default).
+
+## Architecture
+
+### Transport (wsmc)
+
+Standard Java protocol framed by wsmc: each WS binary message = exactly one MC
+packet. Clients connect with the wsmc Fabric mod, or deathcap/wsmc standalone
+TCP↔WS proxy for unmodded clients. TLS comes free from Cloudflare edge (wss://),
+so offline-mode encryption is skipped; zlib compression via flate2 (sync).
+
+**Open item**: confirm against wsmc source whether messages include the VarInt
+length prefix, and where compression sits relative to framing.
+
+### Execution model — no fixed-rate tick loop
+
+DO alarms are not a clock (no sub-second delivery guarantee, at-least-once +
+2 s retry backoff, every reschedule is a durable storage write). Instead:
+
+| Concern | Mechanism |
+|---|---|
+| Movement / chat / block events | inline per `websocket_message`, single-threaded DO serializes |
+| World time / daylight | derived arithmetically: `age = base + (now − base_wallclock)/50` |
+| Time Update packet | vanilla expects every 20 ticks = 1 s → 1 Hz alarm |
+| Keep Alive (~10–15 s) | same alarm |
+| Chunk autosave | dirty-set batch flush in same alarm |
+
+`alarm()` @ ~1 Hz: send Time Updates, keep-alives to quiet clients, flush dirty
+chunks, LRU sweep, and if zero sockets remain → final flush → `deleteAlarm()` →
+full hibernation eligibility (zero cost while idle-connected).
+
+All gameplay mutation goes behind a `World::advance(to_timestamp)` boundary from
+day one so a fixed-step simulator can slot in later (mobs/redstone) via either:
+a `setInterval(50ms)` loop armed while sockets exist (blocks hibernation — fine,
+active sim implies players online), or event-sliced catch-up steps.
+
+### Session lifecycle
+
+WS upgrade → Worker fetch handler → forwarded to Server DO → hibernation API
+(`accept_web_socket` + tags). Handshaking → status ping OR offline login
+(set-compression → login success → play packets). Disconnect → save player data,
+despawn, broadcast; last disconnect triggers idle shutdown above.
+
+### Storage (DO SQLite KV, ≤2 MB/item, 10 GB/DO)
+
+- `chunk:{x}:{z}` → compressed chunk column bytes
+- `player:{uuid}` → position/inventory/state
+- `meta:*` → seed, spawn, world-time base, weather
+
+Writes batched at ~1 Hz + forced flush before hibernation. In-memory chunk LRU
+capped ~64 MB (128 MB isolate limit).
+
+## Crate reuse
+
+| Upstream crate | Disposition |
+|---|---|
+| pumpkin-nbt / util / data | use as-is (fork-pinned); patch Cargo.toml tokio features |
+| pumpkin-protocol | packet defs + ser/de only; skip AsyncRead/Write codec layer |
+| pumpkin-config | struct defs; load from embedded defaults/env/KV |
+| pumpkin-world | Phase 4: lift noise/worldgen (pure compute, strip rayon) |
+| rest of Pumpkin | not carried over (bedrock, plugins, query/rcon/console) |
+
+## Workspace layout
+
+```
+kitecraft/
+├── crates/
+│   ├── server-do/     # workers-rs entry + MinecraftServer DO (fetch/websocket_*/alarm)
+│   ├── net-ws/        # wsmc framing adapter: WS msg ↔ packet Bytes, sink/source traits
+│   └── world/         # ChunkStore trait + DO-SQLite impl, LRU cache, superflat gen
+└── vendor/pumpkin/    # pinned fork with wasm-safe feature gates
+```
+
+Target: wasm32-unknown-unknown via workers-rs (`#[durable_object]`, hibernation
+API merged upstream).
+
+## Phases
+
+0. **Spikes**: (a) document wsmc exact framing; (b) hello-world workers-rs deploy:
+   DO + hibernating binary WS echo + 1 Hz alarm counter.
+1. **Transport**: fork/vendor crates compiling on wasm; framing adapter;
+   server-list ping through wsmc end-to-end.
+2. **Walkable world (MVP)**: offline login → join → superflat chunks at view
+   distance → movement sync → chat → persisted block break/place.
+3. **Robustness**: idle shutdown/hibernate, autosave batching, LRU eviction,
+   multi-player soak test under `wrangler dev`.
+4. **Stretch**: pumpkin-world noise worldgen, player persistence across restarts,
+   HTTP admin endpoint, real-time simulation loop if entities land.
+
+## Risks / constraints
+
+- Deploys kick all players (DO restart drops WebSockets) — accepted for MVP.
+- Script size limits (~10–15 MB gzipped): pumpkin-data registries are large;
+  measure early, trim via codegen features.
+- workers-rs rough edges may need raw worker-sys/wasm-bindgen calls.
+- Unmodded clients require the deathcap-style local proxy; wsmc mod is primary.
+- No inbound TCP/UDP on Workers → Bedrock permanently out of scope here.
