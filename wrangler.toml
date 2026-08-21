@@ -1,0 +1,16 @@
+name = "kitecraft"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-05-05"
+
+[build]
+command = "cd crates/server-do && worker-build --release && cd ../.. && rm -rf build && mv crates/server-do/build build"
+
+[observability]
+enabled = true
+
+[durable_objects]
+bindings = [{ name = "SERVER", class_name = "MinecraftServer" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MinecraftServer"]

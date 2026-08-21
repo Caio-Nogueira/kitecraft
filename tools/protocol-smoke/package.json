@@ -1,0 +1,8 @@
+{
+  "name": "kitecraft-protocol-smoke",
+  "private": true,
+  "description": "Wire-level protocol smoke tests against a running kitecraft instance",
+  "dependencies": {
+    "ws": "^8"
+  }
+}
