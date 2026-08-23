@@ -38,11 +38,14 @@ pub fn login_compress(threshold: i32) -> Vec<u8> {
     encode_packet(cb::LOGIN_COMPRESS, |e| e.varint(threshold))
 }
 
-pub fn login_success(uuid: &[u8; 16], name: &str) -> Vec<u8> {
+pub fn login_success(uuid: &[u8; 16], name: &str, session_id: &[u8; 16]) -> Vec<u8> {
     encode_packet(cb::LOGIN_SUCCESS, |e| {
         e.uuid(uuid);
         e.string(name);
         e.varint(0);
+        // Added in 26.2. This identifies the individual login session rather
+        // than the player's persistent game profile.
+        e.uuid(session_id);
     })
 }
 
@@ -70,6 +73,10 @@ pub fn cfg_registry_data(registry: &str, entries: &[(&str, Option<&[u8]>)]) -> V
             }
         }
     })
+}
+
+pub fn cfg_tags(encoded_tags: &[u8]) -> Vec<u8> {
+    encode_packet(cb::CFG_TAGS, |e| e.raw(encoded_tags))
 }
 
 pub fn cfg_custom_payload(channel: &str, data: &[u8]) -> Vec<u8> {
@@ -121,6 +128,9 @@ pub fn play_login(
         e.bool(false);
         e.varint(0);
         e.varint(sea_level);
+        // Added in 26.2. KiteCraft is offline-mode at the Minecraft layer.
+        e.bool(false);
+        // Secure chat is not enforced.
         e.bool(false);
     })
 }
@@ -134,7 +144,9 @@ pub fn play_game_event(reason: u8, value: f32) -> Vec<u8> {
 
 pub fn play_spawn_position(x: i32, y: i32, z: i32) -> Vec<u8> {
     encode_packet(cb::PLAY_SPAWN_POSITION, |e| {
+        e.string("minecraft:overworld");
         e.i64(pack_block_pos(x, y, z));
+        e.f32(0.0);
         e.f32(0.0);
     })
 }
@@ -167,11 +179,15 @@ pub fn play_keep_alive(id: i64) -> Vec<u8> {
     encode_packet(cb::PLAY_KEEP_ALIVE, |e| e.i64(id))
 }
 
-pub fn play_time_update(age: i64, time_of_day: i64) -> Vec<u8> {
+pub fn play_time_update(age: i64, time_of_day: i64, clock_id: i32) -> Vec<u8> {
     encode_packet(cb::PLAY_UPDATE_TIME, |e| {
         e.i64(age);
-        e.i64(time_of_day);
-        e.bool(true);
+        // Since 26.1, time is a list of synchronized clock updates.
+        e.varint(1);
+        e.varint(clock_id);
+        e.varlong(time_of_day);
+        e.f32(0.0);
+        e.f32(1.0);
     })
 }
 
@@ -183,6 +199,13 @@ pub fn play_chunk_batch_finished(batch_size: i32) -> Vec<u8> {
     encode_packet(cb::PLAY_CHUNK_BATCH_FINISHED, |e| e.varint(batch_size))
 }
 
+pub fn play_set_chunk_cache_center(chunk_x: i32, chunk_z: i32) -> Vec<u8> {
+    encode_packet(cb::PLAY_SET_CHUNK_CACHE_CENTER, |e| {
+        e.varint(chunk_x);
+        e.varint(chunk_z);
+    })
+}
+
 pub struct LightPayload {
     pub sky_light_mask: Vec<i64>,
     pub block_light_mask: Vec<i64>,
@@ -192,17 +215,30 @@ pub struct LightPayload {
     pub block_light: Vec<Vec<u8>>,
 }
 
+pub struct HeightmapPayload {
+    pub id: i32,
+    pub data: Vec<i64>,
+}
+
 pub fn play_chunk_data(
     x: i32,
     z: i32,
-    heightmaps: &Nbt,
+    heightmaps: &[HeightmapPayload],
     chunk_data: &[u8],
     light: &LightPayload,
 ) -> Vec<u8> {
     encode_packet(cb::PLAY_CHUNK_DATA, |e| {
         e.i32(x);
         e.i32(z);
-        e.raw(&encode_root_unnamed(heightmaps));
+        // Heightmaps became a registry-indexed map in 1.21.5.
+        e.varint(heightmaps.len() as i32);
+        for heightmap in heightmaps {
+            e.varint(heightmap.id);
+            e.varint(heightmap.data.len() as i32);
+            for value in &heightmap.data {
+                e.i64(*value);
+            }
+        }
         e.byte_array(chunk_data);
         e.varint(0);
         for mask in [
@@ -252,6 +288,82 @@ pub fn play_ping_response(id: i64) -> Vec<u8> {
     encode_packet(cb::PLAY_PING_RESPONSE, |e| e.i64(id))
 }
 
+pub fn play_attack_animation(entity_id: i32) -> Vec<u8> {
+    encode_packet(cb::PLAY_ANIMATION, |e| {
+        e.varint(entity_id);
+        e.u8(0);
+    })
+}
+
+pub fn play_damage_event(
+    target_entity_id: i32,
+    attacker_entity_id: i32,
+    damage_type_id: i32,
+) -> Vec<u8> {
+    encode_packet(cb::PLAY_DAMAGE_EVENT, |e| {
+        e.varint(target_entity_id);
+        e.varint(damage_type_id);
+        e.varint(attacker_entity_id + 1);
+        e.varint(attacker_entity_id + 1);
+        e.bool(false);
+    })
+}
+
+pub fn play_hurt_animation(entity_id: i32, yaw: f32) -> Vec<u8> {
+    encode_packet(cb::PLAY_HURT_ANIMATION, |e| {
+        e.varint(entity_id);
+        e.f32(yaw);
+    })
+}
+
+pub fn play_set_health(health: f32) -> Vec<u8> {
+    encode_packet(cb::PLAY_SET_HEALTH, |e| {
+        e.f32(health);
+        e.varint(20);
+        e.f32(5.0);
+    })
+}
+
+pub fn play_set_entity_motion(entity_id: i32, x: f64, y: f64, z: f64) -> Vec<u8> {
+    encode_packet(cb::PLAY_SET_ENTITY_MOTION, |e| {
+        e.varint(entity_id);
+        write_packed_velocity(e, x, y, z);
+    })
+}
+
+fn write_packed_velocity(e: &mut Encoder, x: f64, y: f64, z: f64) {
+    const MAX_VELOCITY: f64 = 1.717_986_918_3E10;
+    const MIN_VELOCITY: f64 = 3.051_944_088_384_301E-5;
+    const QUANTIZED_MAX: f64 = 32_766.0;
+
+    let clamp = |value: f64| {
+        if value.is_nan() {
+            0.0
+        } else {
+            value.clamp(-MAX_VELOCITY, MAX_VELOCITY)
+        }
+    };
+    let [x, y, z] = [clamp(x), clamp(y), clamp(z)];
+    let maximum = x.abs().max(y.abs()).max(z.abs());
+    if maximum < MIN_VELOCITY {
+        e.u8(0);
+        return;
+    }
+
+    let scale = maximum.ceil() as i64;
+    let extended = scale > 3;
+    let header = if extended { (scale & 3) | 4 } else { scale };
+    let quantize = |value: f64| {
+        (((value.mul_add(0.5 / scale as f64, 0.5)) * QUANTIZED_MAX).round() as i64).clamp(0, 32_766)
+    };
+    let packed = header | (quantize(x) << 3) | (quantize(y) << 18) | (quantize(z) << 33);
+    e.raw(&(packed as u16).to_le_bytes());
+    e.raw(&((packed >> 16) as i32).to_be_bytes());
+    if extended {
+        e.varint((scale >> 2) as i32);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn play_spawn_entity_player(
     entity_id: i32,
@@ -269,13 +381,12 @@ pub fn play_spawn_entity_player(
         e.f64(x);
         e.f64(y);
         e.f64(z);
+        // 1.21.9+ moved packed velocity before rotation.
+        write_packed_velocity(e, 0.0, 0.0, 0.0);
         e.i8(angle_byte(pitch));
         e.i8(angle_byte(yaw));
         e.i8(angle_byte(yaw));
         e.varint(0);
-        e.i16(0);
-        e.i16(0);
-        e.i16(0);
     })
 }
 
@@ -302,8 +413,12 @@ pub fn play_entity_teleport(
         e.f64(x);
         e.f64(y);
         e.f64(z);
-        e.i8(angle_byte(yaw));
-        e.i8(angle_byte(pitch));
+        e.f64(0.0);
+        e.f64(0.0);
+        e.f64(0.0);
+        e.f32(yaw);
+        e.f32(pitch);
+        e.u32(0);
         e.bool(on_ground);
     })
 }
@@ -436,7 +551,10 @@ pub fn decode_handshake(payload: &[u8]) -> DecodeResult<IncomingHandshake> {
     let mut d = Decoder::new(payload);
     let id = d.varint()?;
     if id != sb::HANDSHAKE {
-        return Err(DecodeError::UnknownPacket { state: "handshake", id });
+        return Err(DecodeError::UnknownPacket {
+            state: "handshake",
+            id,
+        });
     }
     Ok(IncomingHandshake {
         protocol_version: d.varint()?,
@@ -454,8 +572,13 @@ pub fn decode_status(payload: &[u8]) -> DecodeResult<IncomingStatusRequest> {
     let mut d = Decoder::new(payload);
     match d.varint()? {
         sb::STATUS_REQUEST => Ok(IncomingStatusRequest { ping_time: None }),
-        sb::STATUS_PING => Ok(IncomingStatusRequest { ping_time: Some(d.i64()?) }),
-        other => Err(DecodeError::UnknownPacket { state: "status", id: other }),
+        sb::STATUS_PING => Ok(IncomingStatusRequest {
+            ping_time: Some(d.i64()?),
+        }),
+        other => Err(DecodeError::UnknownPacket {
+            state: "status",
+            id: other,
+        }),
     }
 }
 
@@ -470,7 +593,10 @@ pub fn decode_login_start(payload: &[u8]) -> DecodeResult<IncomingLoginStart> {
     if id != sb::LOGIN_START {
         return Err(DecodeError::UnknownPacket { state: "login", id });
     }
-    Ok(IncomingLoginStart { name: d.string()?, uuid: d.uuid()? })
+    Ok(IncomingLoginStart {
+        name: d.string()?,
+        uuid: d.uuid()?,
+    })
 }
 
 pub enum IncomingConfig {
@@ -496,10 +622,48 @@ pub fn decode_config(payload: &[u8]) -> DecodeResult<IncomingConfig> {
 }
 
 pub enum Movement {
-    Position { x: f64, y: f64, z: f64, on_ground: bool },
-    PositionLook { x: f64, y: f64, z: f64, yaw: f32, pitch: f32, on_ground: bool },
-    Look { yaw: f32, pitch: f32, on_ground: bool },
-    Flying { on_ground: bool },
+    Position {
+        x: f64,
+        y: f64,
+        z: f64,
+        on_ground: bool,
+    },
+    PositionLook {
+        x: f64,
+        y: f64,
+        z: f64,
+        yaw: f32,
+        pitch: f32,
+        on_ground: bool,
+    },
+    Look {
+        yaw: f32,
+        pitch: f32,
+        on_ground: bool,
+    },
+    Flying {
+        on_ground: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct IncomingAttack {
+    pub entity_id: i32,
+}
+
+pub fn decode_attack(payload: &[u8]) -> DecodeResult<IncomingAttack> {
+    let mut d = Decoder::new(payload);
+    let id = d.varint()?;
+    if id != sb::PLAY_ATTACK {
+        return Err(DecodeError::UnknownPacket { state: "play", id });
+    }
+    let attack = IncomingAttack {
+        entity_id: d.varint()?,
+    };
+    if !d.is_empty() {
+        return Err(DecodeError::Malformed("trailing attack packet data"));
+    }
+    Ok(attack)
 }
 
 pub fn decode_movement(payload: &[u8]) -> DecodeResult<Movement> {
@@ -509,7 +673,7 @@ pub fn decode_movement(payload: &[u8]) -> DecodeResult<Movement> {
             x: d.f64()?,
             y: d.f64()?,
             z: d.f64()?,
-            on_ground: d.bool()?,
+            on_ground: d.u8()? & 0x01 != 0,
         }),
         sb::PLAY_POSITION_LOOK => Ok(Movement::PositionLook {
             x: d.f64()?,
@@ -517,11 +681,20 @@ pub fn decode_movement(payload: &[u8]) -> DecodeResult<Movement> {
             z: d.f64()?,
             yaw: d.f32()?,
             pitch: d.f32()?,
+            on_ground: d.u8()? & 0x01 != 0,
+        }),
+        sb::PLAY_LOOK => Ok(Movement::Look {
+            yaw: d.f32()?,
+            pitch: d.f32()?,
             on_ground: d.bool()?,
         }),
-        sb::PLAY_LOOK => Ok(Movement::Look { yaw: d.f32()?, pitch: d.f32()?, on_ground: d.bool()? }),
-        sb::PLAY_FLYING => Ok(Movement::Flying { on_ground: d.bool()? }),
-        other => Err(DecodeError::UnknownPacket { state: "play", id: other }),
+        sb::PLAY_FLYING => Ok(Movement::Flying {
+            on_ground: d.bool()?,
+        }),
+        other => Err(DecodeError::UnknownPacket {
+            state: "play",
+            id: other,
+        }),
     }
 }
 
@@ -545,7 +718,13 @@ pub fn decode_block_dig(payload: &[u8]) -> DecodeResult<IncomingBlockDig> {
     let _face = d.i8()?;
     let sequence = d.varint()?;
     let (x, y, z) = unpack_block_pos(pos);
-    Ok(IncomingBlockDig { status, x, y, z, sequence })
+    Ok(IncomingBlockDig {
+        status,
+        x,
+        y,
+        z,
+        sequence,
+    })
 }
 
 pub struct IncomingBlockPlace {
@@ -576,15 +755,19 @@ pub fn decode_block_place(payload: &[u8]) -> DecodeResult<IncomingBlockPlace> {
     let _world_border_hit = d.bool()?;
     let sequence = d.varint()?;
     let (x, y, z) = unpack_block_pos(pos);
-    Ok(IncomingBlockPlace { x, y, z, direction, cursor_x, cursor_y, cursor_z, sequence })
+    Ok(IncomingBlockPlace {
+        x,
+        y,
+        z,
+        direction,
+        cursor_x,
+        cursor_y,
+        cursor_z,
+        sequence,
+    })
 }
 
-pub fn offset_by_direction(
-    x: i32,
-    y: i32,
-    z: i32,
-    direction: i32,
-) -> (i32, i32, i32) {
+pub fn offset_by_direction(x: i32, y: i32, z: i32, direction: i32) -> (i32, i32, i32) {
     let nx = match direction {
         2 => -1,
         3 => 1,
@@ -613,7 +796,19 @@ pub fn decode_chat_message(payload: &[u8]) -> DecodeResult<IncomingChatMessage> 
     if id != sb::PLAY_CHAT_MESSAGE {
         return Err(DecodeError::UnknownPacket { state: "play", id });
     }
-    Ok(IncomingChatMessage { message: d.string()? })
+    let message = d.string()?;
+    let _timestamp = d.i64()?;
+    let _salt = d.i64()?;
+    if d.bool()? {
+        d.take(256)?;
+    }
+    let _message_count = d.varint()?;
+    d.take(3)?;
+    let _checksum = d.u8()?;
+    if !d.is_empty() {
+        return Err(DecodeError::Malformed("trailing chat packet data"));
+    }
+    Ok(IncomingChatMessage { message })
 }
 
 pub fn decode_play_keep_alive(payload: &[u8]) -> DecodeResult<i64> {
@@ -634,9 +829,23 @@ pub fn decode_play_ping_request(payload: &[u8]) -> DecodeResult<i64> {
     d.i64()
 }
 
+pub fn decode_chunk_batch_received(payload: &[u8]) -> DecodeResult<f32> {
+    let mut d = Decoder::new(payload);
+    let id = d.varint()?;
+    if id != sb::PLAY_CHUNK_BATCH_RECEIVED {
+        return Err(DecodeError::UnknownPacket { state: "play", id });
+    }
+    let chunks_per_tick = d.f32()?;
+    if !d.is_empty() {
+        return Err(DecodeError::Malformed("trailing chunk batch data"));
+    }
+    Ok(chunks_per_tick)
+}
+
+#[derive(Debug, Eq, PartialEq)]
 pub struct CreativeSlot {
     pub slot: i16,
-    pub block_state: Option<u16>,
+    pub item_id: Option<u16>,
     pub count: i32,
 }
 
@@ -649,16 +858,23 @@ pub fn decode_set_creative_slot(payload: &[u8]) -> DecodeResult<Option<CreativeS
     let slot = d.i16()?;
     let count = d.varint()?;
     if count == 0 {
-        return Ok(Some(CreativeSlot { slot, block_state: None, count: 0 }));
+        return Ok(Some(CreativeSlot {
+            slot,
+            item_id: None,
+            count: 0,
+        }));
     }
-    let item_id = d.varint()?;
+    let item_id = u16::try_from(d.varint()?).ok();
     let added_components = d.varint()?;
     let removed_components = d.varint()?;
     if added_components != 0 || removed_components != 0 {
         return Ok(None);
     }
-    let block_state = crate::itemmap::lookup_block_state(item_id);
-    Ok(Some(CreativeSlot { slot, block_state, count }))
+    Ok(Some(CreativeSlot {
+        slot,
+        item_id,
+        count,
+    }))
 }
 
 pub fn decode_held_item_slot(payload: &[u8]) -> DecodeResult<Option<i16>> {
@@ -668,4 +884,169 @@ pub fn decode_held_item_slot(payload: &[u8]) -> DecodeResult<Option<i16>> {
         return Err(DecodeError::UnknownPacket { state: "play", id });
     }
     Ok(Some(d.i16()?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn creative_slot_decoder_keeps_protocol_item_id_raw() {
+        let packet = encode_packet(sb::PLAY_SET_CREATIVE_SLOT, |e| {
+            e.i16(36);
+            e.varint(1);
+            e.varint(55);
+            e.varint(0);
+            e.varint(0);
+        });
+
+        assert_eq!(
+            decode_set_creative_slot(&packet).unwrap(),
+            Some(CreativeSlot {
+                slot: 36,
+                item_id: Some(55),
+                count: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn minecraft_26_2_attack_packet_contains_only_the_target() {
+        let packet = encode_packet(sb::PLAY_ATTACK, |e| e.varint(1234));
+        assert_eq!(
+            decode_attack(&packet),
+            Ok(IncomingAttack { entity_id: 1234 })
+        );
+    }
+
+    #[test]
+    fn combat_packets_use_pumpkin_26_2_layouts() {
+        let damage = play_damage_event(12, 34, 34);
+        let mut d = Decoder::new(&damage);
+        assert_eq!(d.varint(), Ok(cb::PLAY_DAMAGE_EVENT));
+        assert_eq!(d.varint(), Ok(12));
+        assert_eq!(d.varint(), Ok(34));
+        assert_eq!(d.varint(), Ok(35));
+        assert_eq!(d.varint(), Ok(35));
+        assert_eq!(d.bool(), Ok(false));
+        assert!(d.is_empty());
+
+        let health = play_set_health(19.0);
+        let mut d = Decoder::new(&health);
+        assert_eq!(d.varint(), Ok(cb::PLAY_SET_HEALTH));
+        assert_eq!(d.f32(), Ok(19.0));
+        assert_eq!(d.varint(), Ok(20));
+        assert_eq!(d.f32(), Ok(5.0));
+        assert!(d.is_empty());
+
+        let velocity = play_set_entity_motion(12, 0.5, 0.4, 0.5);
+        let mut d = Decoder::new(&velocity);
+        assert_eq!(d.varint(), Ok(cb::PLAY_SET_ENTITY_MOTION));
+        assert_eq!(d.varint(), Ok(12));
+        assert_eq!(d.remaining(), 6);
+    }
+
+    #[test]
+    fn movement_position_packets_accept_26_2_collision_flags() {
+        let packet = encode_packet(sb::PLAY_POSITION_LOOK, |e| {
+            e.f64(1.0);
+            e.f64(2.0);
+            e.f64(3.0);
+            e.f32(90.0);
+            e.f32(15.0);
+            e.u8(0x03);
+        });
+        match decode_movement(&packet).unwrap() {
+            Movement::PositionLook { on_ground, .. } => assert!(on_ground),
+            _ => panic!("wrong movement variant"),
+        }
+    }
+
+    #[test]
+    fn chat_decoder_consumes_the_26_2_fingerprint_layout() {
+        let packet = encode_packet(sb::PLAY_CHAT_MESSAGE, |e| {
+            e.string("hello");
+            e.i64(123);
+            e.i64(456);
+            e.bool(false);
+            e.varint(0);
+            e.raw(&[0; 3]);
+            e.u8(0);
+        });
+        assert_eq!(decode_chat_message(&packet).unwrap().message, "hello");
+
+        assert!(matches!(
+            decode_chat_message(&packet[..packet.len() - 1]),
+            Err(DecodeError::Eof)
+        ));
+    }
+
+    #[test]
+    fn changed_26_2_clientbound_layouts_are_complete() {
+        let login = login_success(&[1; 16], "Player", &[2; 16]);
+        let mut d = Decoder::new(&login);
+        assert_eq!(d.varint(), Ok(cb::LOGIN_SUCCESS));
+        assert_eq!(d.uuid(), Ok([1; 16]));
+        assert_eq!(d.string().as_deref(), Ok("Player"));
+        assert_eq!(d.varint(), Ok(0));
+        assert_eq!(d.uuid(), Ok([2; 16]));
+        assert!(d.is_empty());
+
+        let tags = cfg_tags(&[0]);
+        let mut d = Decoder::new(&tags);
+        assert_eq!(d.varint(), Ok(cb::CFG_TAGS));
+        assert_eq!(d.varint(), Ok(0));
+        assert!(d.is_empty());
+
+        let spawn = play_spawn_entity_player(7, &[3; 16], 1.0, 2.0, 3.0, 90.0, 10.0);
+        let mut d = Decoder::new(&spawn);
+        assert_eq!(d.varint(), Ok(cb::PLAY_SPAWN_ENTITY));
+        assert_eq!(d.varint(), Ok(7));
+        assert_eq!(d.uuid(), Ok([3; 16]));
+        assert_eq!(d.varint(), Ok(ENTITY_TYPE_PLAYER));
+        assert_eq!(
+            [d.f64().unwrap(), d.f64().unwrap(), d.f64().unwrap()],
+            [1.0, 2.0, 3.0]
+        );
+        assert_eq!(d.u8(), Ok(0)); // packed zero velocity
+        d.take(3).unwrap(); // pitch, yaw, head yaw
+        assert_eq!(d.varint(), Ok(0));
+        assert!(d.is_empty());
+
+        let spawn_position = play_spawn_position(1, 2, 3);
+        let mut d = Decoder::new(&spawn_position);
+        assert_eq!(d.varint(), Ok(cb::PLAY_SPAWN_POSITION));
+        assert_eq!(d.string().as_deref(), Ok("minecraft:overworld"));
+        assert_eq!(d.i64(), Ok(pack_block_pos(1, 2, 3)));
+        assert_eq!(d.f32(), Ok(0.0));
+        assert_eq!(d.f32(), Ok(0.0));
+        assert!(d.is_empty());
+
+        let time = play_time_update(100, 6000, 0);
+        let mut d = Decoder::new(&time);
+        assert_eq!(d.varint(), Ok(cb::PLAY_UPDATE_TIME));
+        assert_eq!(d.i64(), Ok(100));
+        assert_eq!(d.varint(), Ok(1));
+        assert_eq!(d.varint(), Ok(0));
+        assert_eq!(d.varlong(), Ok(6000));
+        assert_eq!(d.f32(), Ok(0.0));
+        assert_eq!(d.f32(), Ok(1.0));
+        assert!(d.is_empty());
+    }
+
+    #[test]
+    fn chunk_streaming_packets_match_pumpkin_26_2_layouts() {
+        let center = play_set_chunk_cache_center(-12, 34);
+        let mut d = Decoder::new(&center);
+        assert_eq!(d.varint(), Ok(cb::PLAY_SET_CHUNK_CACHE_CENTER));
+        assert_eq!(d.varint(), Ok(-12));
+        assert_eq!(d.varint(), Ok(34));
+        assert!(d.is_empty());
+
+        let acknowledgement = encode_packet(sb::PLAY_CHUNK_BATCH_RECEIVED, |e| e.f32(7.5));
+        assert_eq!(decode_chunk_batch_received(&acknowledgement), Ok(7.5));
+        assert!(
+            decode_chunk_batch_received(&acknowledgement[..acknowledgement.len() - 1]).is_err()
+        );
+    }
 }

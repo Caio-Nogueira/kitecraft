@@ -46,8 +46,8 @@ Therefore, per WS binary message:
   `wsmc.wsmcEndpoint`; our Worker accepts upgrades on any path.
 - TLS terminates at Cloudflare edge (wss://); offline-mode encryption skipped.
 - Supported MC versions (README, 2026): 26.x, 1.21.5–1.21.10, 1.20.5–1.21.4,
-  1.20.2–1.20.4, 1.20.1, 1.18.2–1.20. KiteCraft targets **1.21.4
-  (protocol 769)** — squarely inside the explicitly supported band.
+  1.20.2–1.20.4, 1.20.1, 1.18.2–1.20. KiteCraft targets **26.2
+  (protocol 776)**, which has been verified with a real client.
 
 ## Unmodded clients
 

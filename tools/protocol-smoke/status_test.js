@@ -1,4 +1,7 @@
 const WebSocket = require('ws');
+const { PROTOCOL_VERSION: PINNED_PROTOCOL_VERSION, cb, sb } = require('./protocol_ids');
+const SERVER_URL = process.env.KITECRAFT_URL || 'ws://127.0.0.1:8787/';
+const PROTOCOL_VERSION = Number(process.env.MC_PROTOCOL || PINNED_PROTOCOL_VERSION);
 
 function varint(v) {
   const out = [];
@@ -21,7 +24,7 @@ function packet(id, ...parts) {
   return Buffer.concat([varint(body.length), body]);
 }
 
-const ws = new WebSocket('ws://127.0.0.1:8787/');
+const ws = new WebSocket(SERVER_URL);
 ws.binaryType = 'nodebuffer';
 
 let compressed = false;
@@ -51,13 +54,13 @@ ws.on('message', (data) => {
   const [id] = readVarint(inner, 0);
   console.log('S->C id=0x' + id.toString(16), 'len=' + inner.length);
 
-  if (id === 0x00 && !handshakeDone2) {
+  if (id === cb.STATUS_RESPONSE && !handshakeDone2) {
     // status response
     const [slen, so] = readVarint(inner, 1);
     const json = JSON.parse(inner.subarray(so, so + slen).toString());
     console.log('STATUS:', JSON.stringify(json.version), 'online=', json.players.online);
-    ws.send(packet(0x01, Buffer.from([0,0,0,0,0,0,0,0]))); // ping
-  } else if (id === 0x01 && !loginPhase) {
+    ws.send(packet(sb.STATUS_PING, Buffer.from([0,0,0,0,0,0,0,0]))); // ping
+  } else if (id === cb.STATUS_PING && !loginPhase) {
     console.log('PONG ok');
     ws.close();
     console.log('SMOKE-PASS');
@@ -69,16 +72,10 @@ let handshakeDone2 = false;
 let loginPhase = false;
 
 ws.on('open', () => {
-  const handshake = packet(0x00,
-    varint(769),
-    mcString('127.0.0.1'),
-    Buffer.from([0x22, 0x25]), // port 9444? any u16: use 25565 LE? BE: 0x63DD — use Buffer.writeUInt16BE
-  );
   handshakeDone2 = false;
-  // rebuild with correct u16
-  const hs = packet(0x00, varint(769), mcString('kitecraft.test'), (() => { const p = Buffer.alloc(2); p.writeUInt16BE(25565); return p; })(), varint(1));
+  const hs = packet(sb.HANDSHAKE, varint(PROTOCOL_VERSION), mcString('kitecraft.test'), (() => { const p = Buffer.alloc(2); p.writeUInt16BE(25565); return p; })(), varint(1));
   ws.send(hs);
-  setTimeout(() => ws.send(packet(0x00)), 50); // status request
+  setTimeout(() => ws.send(packet(sb.STATUS_REQUEST)), 50); // status request
 });
 
 setTimeout(() => { console.log('TIMEOUT'); process.exit(1); }, 15000);

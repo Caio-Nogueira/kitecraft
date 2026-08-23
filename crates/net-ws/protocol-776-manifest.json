@@ -1,0 +1,469 @@
+{
+  "clientbound": [
+    {
+      "id": 0,
+      "local": "STATUS_RESPONSE",
+      "state": "status",
+      "upstream": "STATUS_RESPONSE"
+    },
+    {
+      "id": 1,
+      "local": "STATUS_PING",
+      "state": "status",
+      "upstream": "PONG_RESPONSE"
+    },
+    {
+      "id": 0,
+      "local": "LOGIN_DISCONNECT",
+      "state": "login",
+      "upstream": "LOGIN_DISCONNECT"
+    },
+    {
+      "id": 2,
+      "local": "LOGIN_SUCCESS",
+      "state": "login",
+      "upstream": "LOGIN_FINISHED"
+    },
+    {
+      "id": 3,
+      "local": "LOGIN_COMPRESS",
+      "state": "login",
+      "upstream": "LOGIN_COMPRESSION"
+    },
+    {
+      "id": 1,
+      "local": "CFG_CUSTOM_PAYLOAD",
+      "state": "config",
+      "upstream": "CUSTOM_PAYLOAD"
+    },
+    {
+      "id": 2,
+      "local": "CFG_DISCONNECT",
+      "state": "config",
+      "upstream": "DISCONNECT"
+    },
+    {
+      "id": 3,
+      "local": "CFG_FINISH",
+      "state": "config",
+      "upstream": "FINISH_CONFIGURATION"
+    },
+    {
+      "id": 4,
+      "local": "CFG_KEEP_ALIVE",
+      "state": "config",
+      "upstream": "KEEP_ALIVE"
+    },
+    {
+      "id": 5,
+      "local": "CFG_PING",
+      "state": "config",
+      "upstream": "PING"
+    },
+    {
+      "id": 7,
+      "local": "CFG_REGISTRY_DATA",
+      "state": "config",
+      "upstream": "REGISTRY_DATA"
+    },
+    {
+      "id": 13,
+      "local": "CFG_TAGS",
+      "state": "config",
+      "upstream": "UPDATE_TAGS"
+    },
+    {
+      "id": 14,
+      "local": "CFG_KNOWN_PACKS",
+      "state": "config",
+      "upstream": "SELECT_KNOWN_PACKS"
+    },
+    {
+      "id": 1,
+      "local": "PLAY_SPAWN_ENTITY",
+      "state": "play",
+      "upstream": "ADD_ENTITY"
+    },
+    {
+      "id": 2,
+      "local": "PLAY_ANIMATION",
+      "state": "play",
+      "upstream": "ANIMATE"
+    },
+    {
+      "id": 4,
+      "local": "PLAY_ACK_DIGGING",
+      "state": "play",
+      "upstream": "BLOCK_CHANGED_ACK"
+    },
+    {
+      "id": 8,
+      "local": "PLAY_BLOCK_CHANGE",
+      "state": "play",
+      "upstream": "BLOCK_UPDATE"
+    },
+    {
+      "id": 11,
+      "local": "PLAY_CHUNK_BATCH_FINISHED",
+      "state": "play",
+      "upstream": "CHUNK_BATCH_FINISHED"
+    },
+    {
+      "id": 12,
+      "local": "PLAY_CHUNK_BATCH_START",
+      "state": "play",
+      "upstream": "CHUNK_BATCH_START"
+    },
+    {
+      "id": 24,
+      "local": "PLAY_CUSTOM_PAYLOAD",
+      "state": "play",
+      "upstream": "CUSTOM_PAYLOAD"
+    },
+    {
+      "id": 25,
+      "local": "PLAY_DAMAGE_EVENT",
+      "state": "play",
+      "upstream": "DAMAGE_EVENT"
+    },
+    {
+      "id": 32,
+      "local": "PLAY_KICK_DISCONNECT",
+      "state": "play",
+      "upstream": "DISCONNECT"
+    },
+    {
+      "id": 35,
+      "local": "PLAY_SYNC_ENTITY_POSITION",
+      "state": "play",
+      "upstream": "ENTITY_POSITION_SYNC"
+    },
+    {
+      "id": 37,
+      "local": "PLAY_UNLOAD_CHUNK",
+      "state": "play",
+      "upstream": "FORGET_LEVEL_CHUNK"
+    },
+    {
+      "id": 38,
+      "local": "PLAY_GAME_EVENT",
+      "state": "play",
+      "upstream": "GAME_EVENT"
+    },
+    {
+      "id": 42,
+      "local": "PLAY_HURT_ANIMATION",
+      "state": "play",
+      "upstream": "HURT_ANIMATION"
+    },
+    {
+      "id": 44,
+      "local": "PLAY_KEEP_ALIVE",
+      "state": "play",
+      "upstream": "KEEP_ALIVE"
+    },
+    {
+      "id": 45,
+      "local": "PLAY_CHUNK_DATA",
+      "state": "play",
+      "upstream": "LEVEL_CHUNK_WITH_LIGHT"
+    },
+    {
+      "id": 49,
+      "local": "PLAY_LOGIN",
+      "state": "play",
+      "upstream": "LOGIN"
+    },
+    {
+      "id": 53,
+      "local": "PLAY_REL_ENTITY_MOVE",
+      "state": "play",
+      "upstream": "MOVE_ENTITY_POS"
+    },
+    {
+      "id": 54,
+      "local": "PLAY_ENTITY_MOVE_LOOK",
+      "state": "play",
+      "upstream": "MOVE_ENTITY_POS_ROT"
+    },
+    {
+      "id": 56,
+      "local": "PLAY_ENTITY_LOOK",
+      "state": "play",
+      "upstream": "MOVE_ENTITY_ROT"
+    },
+    {
+      "id": 62,
+      "local": "PLAY_PING_RESPONSE",
+      "state": "play",
+      "upstream": "PONG_RESPONSE"
+    },
+    {
+      "id": 64,
+      "local": "PLAY_ABILITIES",
+      "state": "play",
+      "upstream": "PLAYER_ABILITIES"
+    },
+    {
+      "id": 69,
+      "local": "PLAY_PLAYER_REMOVE",
+      "state": "play",
+      "upstream": "PLAYER_INFO_REMOVE"
+    },
+    {
+      "id": 70,
+      "local": "PLAY_PLAYER_INFO",
+      "state": "play",
+      "upstream": "PLAYER_INFO_UPDATE"
+    },
+    {
+      "id": 72,
+      "local": "PLAY_POSITION",
+      "state": "play",
+      "upstream": "PLAYER_POSITION"
+    },
+    {
+      "id": 77,
+      "local": "PLAY_ENTITY_DESTROY",
+      "state": "play",
+      "upstream": "REMOVE_ENTITIES"
+    },
+    {
+      "id": 83,
+      "local": "PLAY_ENTITY_HEAD_ROTATION",
+      "state": "play",
+      "upstream": "ROTATE_HEAD"
+    },
+    {
+      "id": 97,
+      "local": "PLAY_SPAWN_POSITION",
+      "state": "play",
+      "upstream": "SET_DEFAULT_SPAWN_POSITION"
+    },
+    {
+      "id": 101,
+      "local": "PLAY_SET_ENTITY_MOTION",
+      "state": "play",
+      "upstream": "SET_ENTITY_MOTION"
+    },
+    {
+      "id": 104,
+      "local": "PLAY_SET_HEALTH",
+      "state": "play",
+      "upstream": "SET_HEALTH"
+    },
+    {
+      "id": 94,
+      "local": "PLAY_SET_CHUNK_CACHE_CENTER",
+      "state": "play",
+      "upstream": "SET_CHUNK_CACHE_CENTER"
+    },
+    {
+      "id": 113,
+      "local": "PLAY_UPDATE_TIME",
+      "state": "play",
+      "upstream": "SET_TIME"
+    },
+    {
+      "id": 121,
+      "local": "PLAY_SYSTEM_CHAT",
+      "state": "play",
+      "upstream": "SYSTEM_CHAT"
+    },
+    {
+      "id": 125,
+      "local": "PLAY_ENTITY_TELEPORT",
+      "state": "play",
+      "upstream": "TELEPORT_ENTITY"
+    }
+  ],
+  "format": 1,
+  "minecraft_version": "26.2",
+  "protocol_version": 776,
+  "pumpkin_revision": "beb6947dfc21a1a781523bf207a3c2740f4928f9",
+  "pumpkin_version": "0.1.0-dev+26.2-26.40",
+  "serverbound": [
+    {
+      "id": 0,
+      "local": "HANDSHAKE",
+      "state": "handshake",
+      "upstream": "INTENTION"
+    },
+    {
+      "id": 0,
+      "local": "STATUS_REQUEST",
+      "state": "status",
+      "upstream": "STATUS_REQUEST"
+    },
+    {
+      "id": 1,
+      "local": "STATUS_PING",
+      "state": "status",
+      "upstream": "PING_REQUEST"
+    },
+    {
+      "id": 0,
+      "local": "LOGIN_START",
+      "state": "login",
+      "upstream": "HELLO"
+    },
+    {
+      "id": 3,
+      "local": "LOGIN_ACKNOWLEDGED",
+      "state": "login",
+      "upstream": "LOGIN_ACKNOWLEDGED"
+    },
+    {
+      "id": 0,
+      "local": "CFG_SETTINGS",
+      "state": "config",
+      "upstream": "CLIENT_INFORMATION"
+    },
+    {
+      "id": 2,
+      "local": "CFG_CUSTOM_PAYLOAD",
+      "state": "config",
+      "upstream": "CUSTOM_PAYLOAD"
+    },
+    {
+      "id": 3,
+      "local": "CFG_FINISH",
+      "state": "config",
+      "upstream": "FINISH_CONFIGURATION"
+    },
+    {
+      "id": 4,
+      "local": "CFG_KEEP_ALIVE",
+      "state": "config",
+      "upstream": "KEEP_ALIVE"
+    },
+    {
+      "id": 5,
+      "local": "CFG_PONG",
+      "state": "config",
+      "upstream": "PONG"
+    },
+    {
+      "id": 7,
+      "local": "CFG_KNOWN_PACKS",
+      "state": "config",
+      "upstream": "SELECT_KNOWN_PACKS"
+    },
+    {
+      "id": 0,
+      "local": "PLAY_TELEPORT_CONFIRM",
+      "state": "play",
+      "upstream": "ACCEPT_TELEPORTATION"
+    },
+    {
+      "id": 1,
+      "local": "PLAY_ATTACK",
+      "state": "play",
+      "upstream": "ATTACK"
+    },
+    {
+      "id": 9,
+      "local": "PLAY_CHAT_MESSAGE",
+      "state": "play",
+      "upstream": "CHAT"
+    },
+    {
+      "id": 11,
+      "local": "PLAY_CHUNK_BATCH_RECEIVED",
+      "state": "play",
+      "upstream": "CHUNK_BATCH_RECEIVED"
+    },
+    {
+      "id": 14,
+      "local": "PLAY_SETTINGS",
+      "state": "play",
+      "upstream": "CLIENT_INFORMATION"
+    },
+    {
+      "id": 22,
+      "local": "PLAY_CUSTOM_PAYLOAD",
+      "state": "play",
+      "upstream": "CUSTOM_PAYLOAD"
+    },
+    {
+      "id": 28,
+      "local": "PLAY_KEEP_ALIVE",
+      "state": "play",
+      "upstream": "KEEP_ALIVE"
+    },
+    {
+      "id": 30,
+      "local": "PLAY_POSITION",
+      "state": "play",
+      "upstream": "MOVE_PLAYER_POS"
+    },
+    {
+      "id": 31,
+      "local": "PLAY_POSITION_LOOK",
+      "state": "play",
+      "upstream": "MOVE_PLAYER_POS_ROT"
+    },
+    {
+      "id": 32,
+      "local": "PLAY_LOOK",
+      "state": "play",
+      "upstream": "MOVE_PLAYER_ROT"
+    },
+    {
+      "id": 33,
+      "local": "PLAY_FLYING",
+      "state": "play",
+      "upstream": "MOVE_PLAYER_STATUS_ONLY"
+    },
+    {
+      "id": 38,
+      "local": "PLAY_PING_REQUEST",
+      "state": "play",
+      "upstream": "PING_REQUEST"
+    },
+    {
+      "id": 41,
+      "local": "PLAY_BLOCK_DIG",
+      "state": "play",
+      "upstream": "PLAYER_ACTION"
+    },
+    {
+      "id": 45,
+      "local": "PLAY_PONG",
+      "state": "play",
+      "upstream": "PONG"
+    },
+    {
+      "id": 53,
+      "local": "PLAY_HELD_ITEM_SLOT",
+      "state": "play",
+      "upstream": "SET_CARRIED_ITEM"
+    },
+    {
+      "id": 56,
+      "local": "PLAY_SET_CREATIVE_SLOT",
+      "state": "play",
+      "upstream": "SET_CREATIVE_MODE_SLOT"
+    },
+    {
+      "id": 63,
+      "local": "PLAY_ARM_ANIMATION",
+      "state": "play",
+      "upstream": "SWING"
+    },
+    {
+      "id": 66,
+      "local": "PLAY_BLOCK_PLACE",
+      "state": "play",
+      "upstream": "USE_ITEM_ON"
+    },
+    {
+      "id": 67,
+      "local": "PLAY_USE_ITEM",
+      "state": "play",
+      "upstream": "USE_ITEM"
+    }
+  ],
+  "source": "crates/pumpkin-data/src/generated/packet.rs",
+  "source_sha256": "665ed63132f9829e2628cfe5fb6c7f7da4274573424f270d7ba334cf27e62178"
+}

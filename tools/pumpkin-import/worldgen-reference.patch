@@ -1,0 +1,244 @@
+diff --git a/crates/pumpkin-data/src/generated/noise_parameter.rs b/crates/pumpkin-data/src/generated/noise_parameter.rs
+index 8a13e3e..047ba18 100644
+--- a/crates/pumpkin-data/src/generated/noise_parameter.rs
++++ b/crates/pumpkin-data/src/generated/noise_parameter.rs
+@@ -1,4 +1,5 @@
+ /* This file is generated. Do not edit manually. */
++#[derive(Clone, Copy)]
+ pub struct DoublePerlinNoiseParameters {
+     pub id: usize,
+     pub first_octave: i32,
+diff --git a/crates/pumpkin-data/src/generated/noise_router.rs b/crates/pumpkin-data/src/generated/noise_router.rs
+index 649bc15..d7245f3 100644
+--- a/crates/pumpkin-data/src/generated/noise_router.rs
++++ b/crates/pumpkin-data/src/generated/noise_router.rs
+@@ -2576,6 +2576,7 @@ pub enum WrapperType {
+     CacheOnce,
+     CellCache,
+ }
++#[derive(Clone, Copy)]
+ pub enum BaseNoiseFunctionComponent {
+     Beardifier,
+     BlendAlpha,
+diff --git a/crates/pumpkin-world/src/generation/proto_chunk.rs b/crates/pumpkin-world/src/generation/proto_chunk.rs
+index 005b5e9..4464d49 100644
+--- a/crates/pumpkin-world/src/generation/proto_chunk.rs
++++ b/crates/pumpkin-world/src/generation/proto_chunk.rs
+@@ -773,6 +773,62 @@ impl ProtoChunk {
+         self.stage = StagedChunkEnum::Noise;
+     }
+ 
++    #[cfg(test)]
++    pub fn step_to_noise_stone_air_reference(
++        &mut self,
++        generator: &super::generator::VanillaGenerator,
++        noise_router: &crate::generation::noise::router::proto_noise_router::ProtoNoiseRouter,
++    ) {
++        let settings = generator.settings;
++        let generation_shape = &settings.shape;
++        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
++        let start_x = start_block_x(self.x);
++        let start_z = start_block_z(self.z);
++        let sampler = StandardChunkFluidLevelSampler::new(
++            FluidLevel::new(
++                settings.sea_level,
++                Block::from_state_id(settings.default_fluid.id),
++            ),
++            FluidLevel::new(-54, &Block::LAVA),
++        );
++        let mut noise_sampler = ChunkNoiseGenerator::new(
++            noise_router,
++            &generator.random_config,
++            horizontal_cell_count as usize,
++            start_x,
++            start_z,
++            generation_shape,
++            sampler,
++            false,
++            false,
++            Vec::new(),
++            Vec::new(),
++            None,
++        );
++        let horizontal_biome_end = biome_coords::from_block(
++            horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
++        );
++        let surface_config = SurfaceHeightSamplerBuilderOptions::new(
++            biome_coords::from_block(start_x),
++            biome_coords::from_block(start_z),
++            horizontal_biome_end as usize,
++            generation_shape.min_y as i32,
++            generation_shape.max_y() as i32,
++            generation_shape.vertical_cell_block_count() as usize,
++        );
++        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
++            &generator.base_router.surface_estimator,
++            &surface_config,
++        );
++        self.populate_noise(
++            generator,
++            &mut noise_sampler,
++            &generator.random_config.ore_random_deriver,
++            &mut surface_height_estimate_sampler,
++        );
++        self.stage = StagedChunkEnum::Noise;
++    }
++
+     pub fn step_to_surface(&mut self, generator: &super::generator::VanillaGenerator) {
+         debug_assert_eq!(self.stage, StagedChunkEnum::Noise);
+         let start_x = start_block_x(self.x);
+diff --git a/crates/pumpkin-world/src/generation/proto_chunk_test.rs b/crates/pumpkin-world/src/generation/proto_chunk_test.rs
+index 0ba3d65..1b3a802 100644
+--- a/crates/pumpkin-world/src/generation/proto_chunk_test.rs
++++ b/crates/pumpkin-world/src/generation/proto_chunk_test.rs
+@@ -4,8 +4,150 @@ mod test {
+     use crate::chunk_system::chunk_state::StagedChunkEnum;
+     use crate::generation::{generator::WorldGenerator, get_world_gen, proto_chunk::ProtoChunk};
+     use pumpkin_data::dimension::Dimension;
++    use pumpkin_data::noise_router::{
++        BaseNoiseFunctionComponent, BinaryData, BinaryOperation, LinearData, LinearOperation,
++        OVERWORLD_BASE_NOISE_ROUTER, UnaryData, UnaryOperation, WrapperType,
++    };
+     use pumpkin_util::world_seed::Seed;
+ 
++    fn terrain_without_caves_router(
++        generator: &crate::generation::generator::VanillaGenerator,
++    ) -> crate::generation::noise::router::proto_noise_router::ProtoNoiseRouter {
++        use crate::generation::noise::router::proto_noise_router::{
++            ProtoNoiseRouter, ProtoNoiseRouters,
++        };
++
++        let mut stack = OVERWORLD_BASE_NOISE_ROUTER.noise.full_component_stack[..=54].to_vec();
++        stack.extend([
++            BaseNoiseFunctionComponent::Linear {
++                input_index: 54,
++                data: &LinearData {
++                    operation: LinearOperation::Add,
++                    argument: 0.078125,
++                },
++            },
++            BaseNoiseFunctionComponent::Binary {
++                argument1_index: 1,
++                argument2_index: 55,
++                data: &BinaryData {
++                    operation: BinaryOperation::Mul,
++                },
++            },
++            BaseNoiseFunctionComponent::Linear {
++                input_index: 56,
++                data: &LinearData {
++                    operation: LinearOperation::Add,
++                    argument: -0.078125,
++                },
++            },
++            BaseNoiseFunctionComponent::Linear {
++                input_index: 57,
++                data: &LinearData {
++                    operation: LinearOperation::Add,
++                    argument: -0.1171875,
++                },
++            },
++            BaseNoiseFunctionComponent::Binary {
++                argument1_index: 0,
++                argument2_index: 58,
++                data: &BinaryData {
++                    operation: BinaryOperation::Mul,
++                },
++            },
++            BaseNoiseFunctionComponent::Linear {
++                input_index: 59,
++                data: &LinearData {
++                    operation: LinearOperation::Add,
++                    argument: 0.1171875,
++                },
++            },
++            BaseNoiseFunctionComponent::BlendDensity { input_index: 60 },
++            BaseNoiseFunctionComponent::Linear {
++                input_index: 61,
++                data: &LinearData {
++                    operation: LinearOperation::Mul,
++                    argument: 0.64,
++                },
++            },
++            BaseNoiseFunctionComponent::Wrapper {
++                input_index: 62,
++                wrapper: WrapperType::Interpolated,
++            },
++            BaseNoiseFunctionComponent::Unary {
++                input_index: 63,
++                data: &UnaryData {
++                    operation: UnaryOperation::Squeeze,
++                },
++            },
++        ]);
++        let components = ProtoNoiseRouters::generate_proto_stack(&stack, &generator.random_config);
++        ProtoNoiseRouter {
++            full_component_stack: components,
++            barrier_noise: 64,
++            fluid_level_floodedness_noise: 64,
++            fluid_level_spread_noise: 64,
++            lava_noise: 64,
++            erosion: 19,
++            depth: 33,
++            final_density: 64,
++            vein_toggle: 64,
++            vein_ridged: 64,
++            vein_gap: 64,
++        }
++    }
++
++    #[test]
++    fn dump_kitecraft_stone_air_references() {
++        let output = std::env::var_os("KITECRAFT_REFERENCE_DIR")
++            .expect("KITECRAFT_REFERENCE_DIR must be set");
++        let fixtures = [
++            (0u64, 0, 0, "noise_no_blend_no_beard_0_0.occupancy"),
++            (0, 7, 4, "noise_no_blend_no_beard_7_4.occupancy"),
++            (0, -595, 544, "noise_no_blend_no_beard_-595_544.occupancy"),
++            (
++                13579,
++                -6,
++                11,
++                "noise_no_blend_no_beard_13579_-6_11.occupancy",
++            ),
++            (
++                13579,
++                -2,
++                15,
++                "noise_no_blend_no_beard_13579_-2_15.occupancy",
++            ),
++        ];
++        for (seed, chunk_x, chunk_z, name) in fixtures {
++            let world_gen = get_world_gen(
++                Seed(seed),
++                Dimension::OVERWORLD,
++                false,
++                Vec::new(),
++                String::new(),
++            );
++            let WorldGenerator::Noise(generator) = &*world_gen else {
++                unreachable!()
++            };
++            let terrain_router = terrain_without_caves_router(generator);
++            let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
++            chunk.stage = StagedChunkEnum::StructureReferences;
++            chunk.step_to_noise_stone_air_reference(generator, &terrain_router);
++            let mut bytes = vec![0u8; 16 * 384 * 16 / 8];
++            let mut index = 0usize;
++            for x in 0..16 {
++                for local_y in 0..384 {
++                    for z in 0..16 {
++                        if chunk.get_block_state_raw(x, local_y, z).as_u16() == 1 {
++                            bytes[index / 8] |= 1 << (index % 8);
++                        }
++                        index += 1;
++                    }
++                }
++            }
++            std::fs::write(std::path::Path::new(&output).join(name), bytes).unwrap();
++        }
++    }
++
+     #[test]
+     fn structure_references_are_rebuilt_when_resuming_generation() {
+         use crate::chunk_system::chunk_state::Chunk;

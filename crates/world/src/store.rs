@@ -3,6 +3,10 @@ use crate::lru::LruChunkCache;
 use crate::superflat::Superflat;
 use std::collections::HashSet;
 
+pub trait ChunkGenerator {
+    fn generate(&mut self, x: i32, z: i32) -> ChunkColumn;
+}
+
 pub trait ChunkBacking {
     fn read(&self, x: i32, z: i32) -> Option<Vec<u8>>;
     fn write(&mut self, x: i32, z: i32, data: &[u8]);
@@ -40,7 +44,7 @@ pub struct World<B: ChunkBacking> {
     backing: B,
     cache: LruChunkCache<ChunkColumn>,
     dirty: HashSet<(i32, i32)>,
-    generator: Superflat,
+    generator: Box<dyn ChunkGenerator>,
     cache_capacity: usize,
 }
 
@@ -52,12 +56,24 @@ impl<B: ChunkBacking> World<B> {
     }
 
     pub fn with_cache_size(backing: B, cache_chunks: usize) -> Self {
+        Self::with_generator_and_cache_size(backing, Box::new(Superflat::classic()), cache_chunks)
+    }
+
+    pub fn with_generator(backing: B, generator: Box<dyn ChunkGenerator>) -> Self {
+        Self::with_generator_and_cache_size(backing, generator, DEFAULT_CACHE_CHUNKS)
+    }
+
+    pub fn with_generator_and_cache_size(
+        backing: B,
+        generator: Box<dyn ChunkGenerator>,
+        cache_chunks: usize,
+    ) -> Self {
         let cap = cache_chunks.max(1);
         Self {
             backing,
             cache: LruChunkCache::new(cap),
             dirty: HashSet::new(),
-            generator: Superflat::classic(),
+            generator,
             cache_capacity: cap,
         }
     }
@@ -76,7 +92,11 @@ impl<B: ChunkBacking> World<B> {
 
     pub fn chunk(&mut self, x: i32, z: i32) -> &ChunkColumn {
         if self.cache.get(x, z).is_none() {
-            let col = match self.backing.read(x, z).and_then(|blob| deserialize_column(&blob)) {
+            let col = match self
+                .backing
+                .read(x, z)
+                .and_then(|blob| deserialize_column(&blob))
+            {
                 Some(col) => col,
                 None => self.generator.generate(x, z),
             };
@@ -141,6 +161,16 @@ mod tests {
     use super::*;
     use crate::blocks;
 
+    struct MarkerGenerator;
+
+    impl ChunkGenerator for MarkerGenerator {
+        fn generate(&mut self, x: i32, z: i32) -> ChunkColumn {
+            let mut column = ChunkColumn::default();
+            column.set_block(0, crate::MIN_Y, 0, (x.wrapping_add(z) as u16).max(1));
+            column
+        }
+    }
+
     #[test]
     fn generates_then_persists_edits() {
         let mut world = World::new(MemoryStore::new());
@@ -170,5 +200,13 @@ mod tests {
         world.flush_dirty();
         let mut reopened = World::new(world.backing);
         assert_eq!(reopened.get_block(0, -60, 0), Some(blocks::DIRT));
+    }
+
+    #[test]
+    fn injected_generator_handles_missing_chunks() {
+        let mut world = World::with_generator(MemoryStore::new(), Box::new(MarkerGenerator));
+        assert_eq!(world.get_block(0, crate::MIN_Y, 0), Some(1));
+        assert_eq!(world.get_block(16, crate::MIN_Y, 0), Some(1));
+        assert_eq!(world.get_block(32, crate::MIN_Y, 0), Some(2));
     }
 }

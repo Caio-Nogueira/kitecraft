@@ -1,9 +1,14 @@
-# Protocol notes — Minecraft Java 1.21.4 (protocol 769)
+# Protocol notes — Minecraft Java 26.2 (protocol 776)
 
-Target locked: **1.21.4 / protocol 769**. Sources of truth used during
-implementation: PrismarineJS/minecraft-data `data/pc/1.21.4/protocol.json` +
-`blocks.json`, minecraft.wiki "Java Edition protocol/Registries",
-misode/mcmeta tag `1.21.4-registries` and `1.21.4-data`.
+# Target
+
+The currently tested target is **26.2 / protocol 776**. Packet IDs are generated
+from Pumpkin revision `beb6947dfc21a1a781523bf207a3c2740f4928f9`; see
+`crates/net-ws/protocol-776-manifest.json`. Run
+`tools/pumpkin-import/import_protocol_ids.py <pinned-pumpkin-checkout>` to
+reproduce the Rust and JavaScript tables. The embedded configuration registry
+data is generated from the same pinned Pumpkin revision; see
+`crates/server-do/registry-26.2-manifest.json`.
 
 ## Connection lifecycle
 
@@ -16,25 +21,26 @@ C→S handshake      0x00 {protocolVersion varint, serverHost string, serverPort
   nextState=2: login (offline mode)
     C→S login start 0x00 {name string, uuid [u8;16]}
     S→C set compression 0x03 {threshold varint}   (threshold 256)
-    S→C login success 0x02 {uuid, name, properties[] = 0}
+    S→C login success 0x02 {uuid, name, properties[] = 0, sessionId uuid}
     C→S login acknowledged 0x03           → both switch to CONFIGURATION state
 CONFIGURATION:
-    S→C known packs 0x0e [{namespace,id,version}]   ("minecraft","core","1.21.4")
+    S→C known packs 0x0e [{namespace,id,version}]   ("minecraft","core","26.2")
     C→S known packs 0x07                  (client echoes; may be empty)
-    S→C registry data 0x07 ×13            (see below)
+    S→C registry data 0x07 ×29            (see below)
+    S→C update tags 0x0d {17 registry tag sets}
     S→C custom payload 0x01 {"minecraft:brand", "kitecraft"}
     S→C finish configuration 0x03 {}
     C→S finish configuration 0x03 {}      → both switch to PLAY state
 PLAY:
-    S→C login (join game) 0x2c …          (SpawnInfo, gamemode creative)
-    S→C game event 0x23 {reason=13 (start waiting for chunks), value=0}
-    S→C spawn position 0x5b, S→C position 0x42 (teleport id)
-    S→C chunk batch start 0x0d, chunk data 0x28 ×N, chunk batch finished 0x0c
+    S→C login (join game) 0x31 …          (SpawnInfo, gamemode creative)
+    S→C game event 0x26 {reason=13 (start waiting for chunks), value=0}
+    S→C spawn position 0x61, S→C position 0x48 (teleport id)
+    S→C chunk batch start 0x0c, chunk data 0x2d ×N, chunk batch finished 0x0b
     ... gameplay ...
-disconnect: save player, S→C player remove 0x3f broadcast, close WS
+disconnect: save player, S→C player remove 0x45 broadcast, close WS
 ```
 
-## Packet IDs used (1.21.4)
+## Packet IDs used (verified with 26.2)
 
 Handshaking S→C: — | C→S: handshake 0x00.
 Status C→S: request 0x00, ping 0x01. Status S→C: response 0x00, ping 0x01.
@@ -43,71 +49,77 @@ success 0x02, compress 0x03.
 Configuration C→S: known packs 0x07, custom payload 0x02, finish 0x03,
 keep alive 0x04, pong 0x05, settings 0x00.
 Configuration S→C: custom payload 0x01, disconnect 0x02, finish 0x03,
-keep alive 0x04, ping 0x05, registry data 0x07, known packs 0x0e.
+keep alive 0x04, ping 0x05, registry data 0x07, update tags 0x0d,
+known packs 0x0e.
 
-Play S→C:
-bundle_delimiter 0x00, animation 0x03, ack_player_digging 0x05,
-block_change 0x09, chunk_batch_finished 0x0c, chunk_batch_start 0x0d,
-sync_entity_position 0x20, unload_chunk 0x22 (z i32 THEN x i32),
-game_event 0x23, keep_alive 0x27, chunk_data 0x28, update_light 0x2b,
-login 0x2c, rel_entity_move 0x2f, entity_move_look 0x30, entity_look 0x32,
-player_remove 0x3f, player_info 0x40, position 0x42, entity_head_rotation 0x4d,
-spawn_position 0x5b, abilities 0x3a, update_time 0x6b, system_chat 0x73,
-entity_teleport 0x77, kick_disconnect 0x1d, custom_payload 0x19.
+Play S→C: add entity `0x01`, animate `0x02`, block ack `0x04`, block update
+`0x08`, chunk batch end/start `0x0b`/`0x0c`, custom payload `0x18`, damage
+event `0x19`, disconnect `0x20`, entity position sync `0x23`, unload chunk
+`0x25`, game event `0x26`, hurt animation `0x2a`, keep alive `0x2c`, chunk
+with light `0x2d`, login `0x31`, relative move `0x35`, relative move+look
+`0x36`, entity look `0x38`, pong `0x3e`, abilities `0x40`, player info
+remove/update `0x45`/`0x46`, player position `0x48`, remove entities `0x4d`,
+rotate head `0x53`, default spawn `0x61`, entity motion `0x65`, health `0x68`,
+time `0x71`, system chat `0x79`, entity teleport `0x7d`.
 
-Play C→S:
-teleport_confirm 0x00, chat_message 0x07, settings 0x0c,
-configuration_acknowledged 0x0e, custom_payload 0x14, keep_alive 0x1a,
-position 0x1c, position_look 0x1d, look 0x1e, flying 0x1f,
-pong 0x2b, block_dig 0x27, arm_animation 0x3a, block_place 0x3c,
-use_item 0x3d, ping_request 0x24 (reply play ping_response 0x38).
+Play C→S: teleport confirm `0x00`, attack `0x01`, chat `0x09`, settings
+`0x0e`, custom payload `0x16`, keep alive `0x1c`, position `0x1e`,
+position+look `0x1f`, look `0x20`, status-only movement `0x21`, ping `0x26`,
+block action `0x29`, pong `0x2d`, held slot `0x35`, creative slot `0x38`, swing
+`0x3f`, use item on `0x42`, use item `0x43`. Minecraft 26.1+ uses the
+dedicated attack packet containing only the target entity VarInt.
+
+The damage event uses damage-type registry index 34 (`minecraft:player_attack`).
 
 ## Configuration-phase registries
 
-Known-packs negotiation lets us send entry *names* without NBT; the vanilla
-client sources NBT from its built-in `minecraft:core` pack. Empirically
-(tachyne-world PROTOCOL.md, 1.21.5): dimension_type / worldgen/biome /
-damage_type must carry inline NBT even when the pack matches; Update Tags can
-be skipped. KiteCraft sends:
+KiteCraft sends Pumpkin's complete 26.2 synchronized registry set: 29
+registries and 398 entries, each with its inline unnamed-compound NBT. This
+includes the 26.x variant, timeline, dialog, world-clock, test, and sulfur-cube
+registries absent from the POC capture. The exact ordered registry list and
+counts are recorded in `crates/server-do/registry-26.2-manifest.json`.
 
-- inline NBT: `minecraft:dimension_type` (single custom flat entry
-  `kitecraft:flat`, overworld-like), `minecraft:worldgen/biome`
-  (`minecraft:plains` only), `minecraft:damage_type` (all 49 vanilla entries).
-- names only: banner_pattern(43), cat_variant(11), chat_type(7),
-  enchantment(42), instrument(8), jukebox_song(19), painting_variant(50),
-  trim_material(11), trim_pattern(18), wolf_variant(9).
+Entry order defines numeric wire IDs. Generated constants connect consumers to
+that order: plains biome = 40, overworld dimension type = 0,
+`player_attack` damage type = 34, and overworld clock = 0. Chunk biome palettes,
+Join Game, Damage Event, and Time Update use those constants rather than
+hand-maintained numbers.
 
-Entry order within a packet defines numeric IDs; biome index 0 = plains is
-assumed by chunk biomes palettes. Not present in 1.21.4: cow_variant,
-wolf_sound_variant.
+Before finishing configuration, KiteCraft also sends Pumpkin's complete 26.2
+network tag set: 17 registry categories, 1,207 tags, and 11,693 entry
+references. This includes tags referenced by synchronized dimension,
+enchantment, and sulfur-cube entries. The generated payload and counts are
+recorded in `crates/server-do/tags-26.2-manifest.json`.
 
-## Chunk format (1.18+, unchanged in 1.21.4)
+## Chunk format (protocol 776)
 
-Chunk Data packet 0x28: x i32, z i32, heightmaps NBT, chunkData buffer,
+Chunk Data packet `0x2d`: x i32, z i32, registry-indexed heightmap map,
+chunkData buffer,
 block entities array (0), sky/block light masks + arrays inline.
 
-chunkData = 24 sections (y −64…320). Per section: non-air count i16; if 0,
-section ends. Else paletted container: bits-per-entry u8, palette, data array
-(varint long count + packed i64s, entries never span longs, little-endian bit
-order within each long). Palette modes: bits=0 single value (varint);
-1–8 indirect (varint count + varints); ≥9 direct (no palette, raw global
-state ids; 15 bits for blocks in 1.21.4? we never emit direct). Biomes
+chunkData = 24 sections (y −64…320). Every section contains non-air count i16,
+fluid count i16, then its block and biome paletted containers. Packed-storage
+long counts are implicit in 26.2 and are not written. Entries never span longs
+and use little-endian bit order within each big-endian i64. Palette modes are
+bits=0 single value, 1–8 indirect, and ≥9 direct global state IDs. Biomes
 container follows with same layout (64 entries/section; single-value plains).
 
-Heightmaps NBT: compound of long-arrays; MOTION_BLOCKING + WORLD_SURFACE,
-9 bits/entry, 37 columns per long array (256 entries * 9 bits = 36 longs).
+Heightmaps are keyed by synchronized registry IDs: WORLD_SURFACE=1,
+MOTION_BLOCKING=4, and MOTION_BLOCKING_NO_LEAVES=5. Each uses 9 bits/entry and
+37 i64s for 256 columns with non-spanning values.
 
 Superflat column (KiteCraft default): y=-64 bedrock(85), y=-63/-62 dirt(10),
 y=-61 grass_block[snowy=false](9); everything else air(0). Section 0 holds all
 non-air blocks (count 1024, indirect palette [bedrock,dirt,grass,air] 2bpp);
-sections 1..23 are empty (count 0). Sky light sent as full-brightness 0xFF
-arrays for all sections.
+sections 1..23 use explicit single-air containers. Sky light is full brightness
+for section-mask bits 1..24; boundary bits 0 and 25 are marked empty.
 
 ## Block state IDs (worldgen-relevant)
 
 air=0, stone=1, grass_block[snowy=false]=9, dirt=10, bedrock=85.
 (BooleanProperty orders its values [true, false], so snowy=true=8,
-snowy=false=9 — matches prismarine defaultState.)
+snowy=false=9.) These and all other 26.2 block states now come from the compact
+Pumpkin-derived `block-data` crate pinned in `crates/block-data/UPSTREAM.md`.
 
 ## Misc encodings
 
@@ -118,5 +130,5 @@ snowy=false=9 — matches prismarine defaultState.)
 - Text components: NBT-wrapped JSON strings? No — 1.20.3+ text components are
   serialized as SNBT-formatted NBT compounds on the wire ("anonymousNbt" =
   unnamed compound tag). We emit `{text:"..."}` compounds.
-- Chat from players is echoed via System Chat (0x73) — avoids signed-chat
+- Chat from players is echoed via System Chat (`0x79`) — avoids signed-chat
   boilerplate entirely; legal in all versions.

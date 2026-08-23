@@ -1,12 +1,10 @@
 pub const SECTIONS_PER_CHUNK: usize = 24;
 pub const SECTION_VOLUME: usize = 4096;
 
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Default)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Section {
     pub blocks: Option<Box<[u16; SECTION_VOLUME]>>,
 }
-
 
 impl Section {
     pub fn is_empty(&self) -> bool {
@@ -24,7 +22,9 @@ impl Section {
         if state == 0 && self.blocks.is_none() {
             return;
         }
-        let arr = self.blocks.get_or_insert_with(|| Box::new([0; SECTION_VOLUME]));
+        let arr = self
+            .blocks
+            .get_or_insert_with(|| Box::new([0; SECTION_VOLUME]));
         arr[index] = state;
         if arr.iter().all(|&b| b == 0) {
             self.blocks = None;
@@ -115,7 +115,10 @@ impl ChunkPos {
     }
 
     pub fn from_block(bx: i32, bz: i32) -> Self {
-        Self { x: bx >> 4, z: bz >> 4 }
+        Self {
+            x: bx >> 4,
+            z: bz >> 4,
+        }
     }
 }
 
@@ -172,7 +175,10 @@ fn zlib_decompress(data: &[u8], max_out: usize) -> Option<Vec<u8>> {
     use std::io::Read;
     let mut dec = ZlibDecoder::new(data);
     let mut out = Vec::new();
-    dec.by_ref().take(max_out as u64).read_to_end(&mut out).ok()?;
+    dec.by_ref()
+        .take(max_out as u64)
+        .read_to_end(&mut out)
+        .ok()?;
     Some(out)
 }
 
@@ -214,7 +220,7 @@ mod tests {
         let back = deserialize_column(&blob).unwrap();
         assert_eq!(back.get_block(3, 200, 4), Some(12345));
         assert_eq!(back.get_block(5, -61, 5), Some(blocks::GRASS_BLOCK));
-        assert_eq!(back.sections[1].is_empty(), true);
+        assert!(back.sections[1].is_empty());
     }
 
     #[test]

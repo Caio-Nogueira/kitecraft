@@ -1,0 +1,100 @@
+{
+  "blob_sha256": "bee727e1a2a9eae112d4b49950dcf72aabdfa4df0284a30f3a37992dda03fac7",
+  "blob_size": 49858,
+  "entry_reference_count": 11693,
+  "format": 1,
+  "minecraft_version": "26.2",
+  "pumpkin_revision": "beb6947dfc21a1a781523bf207a3c2740f4928f9",
+  "pumpkin_version": "0.1.0-dev+26.2-26.40",
+  "registries": [
+    {
+      "entry_reference_count": 42,
+      "id": "minecraft:banner_pattern",
+      "tag_count": 11
+    },
+    {
+      "entry_reference_count": 5052,
+      "id": "minecraft:block",
+      "tag_count": 392
+    },
+    {
+      "entry_reference_count": 0,
+      "id": "minecraft:cat_variant",
+      "tag_count": 0
+    },
+    {
+      "entry_reference_count": 229,
+      "id": "minecraft:damage_type",
+      "tag_count": 34
+    },
+    {
+      "entry_reference_count": 0,
+      "id": "minecraft:dialog",
+      "tag_count": 2
+    },
+    {
+      "entry_reference_count": 0,
+      "id": "minecraft:dimension_type",
+      "tag_count": 0
+    },
+    {
+      "entry_reference_count": 326,
+      "id": "minecraft:enchantment",
+      "tag_count": 29
+    },
+    {
+      "entry_reference_count": 406,
+      "id": "minecraft:entity_type",
+      "tag_count": 54
+    },
+    {
+      "entry_reference_count": 13,
+      "id": "minecraft:fluid",
+      "tag_count": 18
+    },
+    {
+      "entry_reference_count": 121,
+      "id": "minecraft:game_event",
+      "tag_count": 5
+    },
+    {
+      "entry_reference_count": 16,
+      "id": "minecraft:instrument",
+      "tag_count": 3
+    },
+    {
+      "entry_reference_count": 4303,
+      "id": "minecraft:item",
+      "tag_count": 488
+    },
+    {
+      "entry_reference_count": 47,
+      "id": "minecraft:painting_variant",
+      "tag_count": 1
+    },
+    {
+      "entry_reference_count": 30,
+      "id": "minecraft:point_of_interest_type",
+      "tag_count": 3
+    },
+    {
+      "entry_reference_count": 41,
+      "id": "minecraft:potion",
+      "tag_count": 2
+    },
+    {
+      "entry_reference_count": 7,
+      "id": "minecraft:timeline",
+      "tag_count": 4
+    },
+    {
+      "entry_reference_count": 1060,
+      "id": "minecraft:worldgen/biome",
+      "tag_count": 161
+    }
+  ],
+  "registry_count": 17,
+  "source": "crates/pumpkin-data/src/generated/tag.rs",
+  "source_sha256": "054b24a56445a923667ce6a20fadaf2f183880adca0e999113b75059d32fb9a9",
+  "tag_count": 1207
+}

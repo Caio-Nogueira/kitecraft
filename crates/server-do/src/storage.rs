@@ -2,6 +2,27 @@ use wasm_bindgen::JsCast;
 use worker::SqlStorage;
 use world::ChunkBacking;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorldgenKind {
+    Superflat,
+    PumpkinTerrain,
+}
+
+impl WorldgenKind {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Superflat => "superflat-v1",
+            Self::PumpkinTerrain => "pumpkin-density-v1",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WorldgenMetadata {
+    pub kind: WorldgenKind,
+    pub seed: u64,
+}
+
 pub struct SqliteBacking {
     sql: SqlStorage,
 }
@@ -12,8 +33,10 @@ impl SqliteBacking {
     }
 
     pub fn init_schema(&self) -> worker::Result<()> {
-        self.sql
-            .exec("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v BLOB)", None)?;
+        self.sql.exec(
+            "CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v BLOB)",
+            None,
+        )?;
         Ok(())
     }
 
@@ -57,6 +80,41 @@ impl SqliteBacking {
         blob.extend_from_slice(&a.to_le_bytes());
         blob.extend_from_slice(&b.to_le_bytes());
         self.set_blob(key, &blob);
+    }
+
+    pub fn has_chunks(&self) -> bool {
+        self.sql
+            .exec("SELECT 1 FROM kv WHERE k LIKE 'chunk:%' LIMIT 1", None)
+            .ok()
+            .and_then(|mut cursor| std::iter::Iterator::next(&mut cursor))
+            .is_some()
+    }
+
+    pub fn worldgen_metadata(&self) -> Option<WorldgenMetadata> {
+        let blob = self.get_blob("worldgen")?;
+        if blob.len() != 10 || blob[0] != 1 {
+            return None;
+        }
+        let kind = match blob[1] {
+            0 => WorldgenKind::Superflat,
+            1 => WorldgenKind::PumpkinTerrain,
+            _ => return None,
+        };
+        Some(WorldgenMetadata {
+            kind,
+            seed: u64::from_le_bytes(blob[2..10].try_into().ok()?),
+        })
+    }
+
+    pub fn set_worldgen_metadata(&self, metadata: WorldgenMetadata) {
+        let mut blob = Vec::with_capacity(10);
+        blob.push(1);
+        blob.push(match metadata.kind {
+            WorldgenKind::Superflat => 0,
+            WorldgenKind::PumpkinTerrain => 1,
+        });
+        blob.extend_from_slice(&metadata.seed.to_le_bytes());
+        self.set_blob("worldgen", &blob);
     }
 }
 

@@ -72,7 +72,9 @@ pub fn decode_frame(msg: &[u8], threshold: Option<usize>) -> DecodeResult<Vec<u8
     let mut pos = 0;
     let declared = read_varint(msg, &mut pos)? as usize;
     if declared != msg.len() - pos {
-        return Err(DecodeError::BadFrame("length prefix does not match message"));
+        return Err(DecodeError::BadFrame(
+            "length prefix does not match message",
+        ));
     }
     decode_inner(&msg[pos..], threshold)
 }

@@ -1,0 +1,12 @@
+[package]
+name = "worldgen-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+md5 = "0.7"
+
+[dev-dependencies]
+sha2 = "0.10"
+wasm-bindgen-test = "0.3"

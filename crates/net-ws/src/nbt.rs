@@ -16,7 +16,12 @@ pub enum Nbt {
 
 impl Nbt {
     pub fn compound(entries: Vec<(&str, Nbt)>) -> Self {
-        Nbt::Compound(entries.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+        Nbt::Compound(
+            entries
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect(),
+        )
     }
 
     pub fn str(s: impl Into<String>) -> Self {
@@ -117,9 +122,7 @@ mod tests {
         let bytes = encode_root_unnamed(&value);
         assert_eq!(
             bytes,
-            vec![
-                0x0A, 0x08, 0x00, 0x04, b't', b'e', b'x', b't', 0x00, 0x02, b'h', b'i', 0x00
-            ]
+            vec![0x0A, 0x08, 0x00, 0x04, b't', b'e', b'x', b't', 0x00, 0x02, b'h', b'i', 0x00]
         );
     }
 
@@ -150,12 +153,15 @@ mod tests {
         let mut out = Vec::new();
         write_named(&mut out, "h", &value);
         assert_eq!(out[0], 12);
-        assert_eq!(out[out.len() - 16..], {
-            let mut e = Vec::new();
-            e.extend_from_slice(&1i64.to_be_bytes());
-            e.extend_from_slice(&(-1i64).to_be_bytes());
-            e
-        }[..]);
+        assert_eq!(
+            out[out.len() - 16..],
+            {
+                let mut e = Vec::new();
+                e.extend_from_slice(&1i64.to_be_bytes());
+                e.extend_from_slice(&(-1i64).to_be_bytes());
+                e
+            }[..]
+        );
     }
 
     #[test]

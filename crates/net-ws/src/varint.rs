@@ -79,7 +79,20 @@ mod tests {
 
     #[test]
     fn roundtrips() {
-        for v in [0, 1, -1, 127, 128, -128, 255, 256, 65535, 2097152, i32::MAX, i32::MIN] {
+        for v in [
+            0,
+            1,
+            -1,
+            127,
+            128,
+            -128,
+            255,
+            256,
+            65535,
+            2097152,
+            i32::MAX,
+            i32::MIN,
+        ] {
             roundtrip(v);
         }
     }
@@ -88,7 +101,10 @@ mod tests {
     fn rejects_overlong() {
         let data = [0xFF; 6];
         let mut pos = 0;
-        assert_eq!(read_varint(&data, &mut pos), Err(DecodeError::VarIntTooLong));
+        assert_eq!(
+            read_varint(&data, &mut pos),
+            Err(DecodeError::VarIntTooLong)
+        );
     }
 
     #[test]

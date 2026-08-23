@@ -1,5 +1,6 @@
 use crate::blocks;
 use crate::chunk::ChunkColumn;
+use crate::store::ChunkGenerator;
 
 pub struct Superflat {
     pub layers: Vec<(u16, u32)>,
@@ -40,6 +41,12 @@ impl Superflat {
             }
         }
         col
+    }
+}
+
+impl ChunkGenerator for Superflat {
+    fn generate(&mut self, x: i32, z: i32) -> ChunkColumn {
+        Self::generate(self, x, z)
     }
 }
 

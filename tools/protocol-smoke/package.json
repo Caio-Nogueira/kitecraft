@@ -2,6 +2,12 @@
   "name": "kitecraft-protocol-smoke",
   "private": true,
   "description": "Wire-level protocol smoke tests against a running kitecraft instance",
+  "scripts": {
+    "test": "node status_test.js && node login_test.js && node chunk_stream_test.js && node play_test.js && node mp_test.js && node persist_test.js && node tick_test.js && node combat_test.js",
+    "test:chunks": "node chunk_stream_test.js",
+    "test:tick": "node tick_test.js",
+    "test:combat": "node combat_test.js"
+  },
   "dependencies": {
     "ws": "^8"
   }

@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""Import Minecraft 26.2 network tags from pinned Pumpkin."""
+
+import argparse
+import hashlib
+import json
+import re
+import subprocess
+from pathlib import Path
+
+
+PUMPKIN_REVISION = "beb6947dfc21a1a781523bf207a3c2740f4928f9"
+PUMPKIN_VERSION = "0.1.0-dev+26.2-26.40"
+
+# Pumpkin's RegistryKey::NETWORK_KEYS order. Categories without a generated
+# map are still written with an empty tag list, matching CUpdateTags.
+NETWORK_KEYS = [
+    ("banner_pattern", "BannerPattern", "BANNERPATTERN_TAGS"),
+    ("block", "Block", "BLOCK_TAGS"),
+    ("cat_variant", None, None),
+    ("damage_type", "DamageType", "DAMAGETYPE_TAGS"),
+    ("dialog", "Dialog", "DIALOG_TAGS"),
+    ("dimension_type", None, None),
+    ("enchantment", "Enchantment", "ENCHANTMENT_TAGS"),
+    ("entity_type", "EntityType", "ENTITYTYPE_TAGS"),
+    ("fluid", "Fluid", "FLUID_TAGS"),
+    ("game_event", "GameEvent", "GAMEEVENT_TAGS"),
+    ("instrument", "Instrument", "INSTRUMENT_TAGS"),
+    ("item", "Item", "ITEM_TAGS"),
+    ("painting_variant", "PaintingVariant", "PAINTINGVARIANT_TAGS"),
+    ("point_of_interest_type", "PointOfInterestType", "POINTOFINTERESTTYPE_TAGS"),
+    ("potion", "Potion", "POTION_TAGS"),
+    ("timeline", "Timeline", "TIMELINE_TAGS"),
+    ("worldgen/biome", "WorldgenBiome", "WORLDGENBIOME_TAGS"),
+]
+
+
+def checked_revision(pumpkin: Path) -> str:
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=pumpkin, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    if revision != PUMPKIN_REVISION:
+        raise SystemExit(
+            f"expected Pumpkin {PUMPKIN_REVISION}, found {revision}; refusing an unpinned import"
+        )
+    return revision
+
+
+def parse_constants(source: str, module: str, map_name: str) -> dict[str, list[int]]:
+    start_marker = f"pub mod {module} {{"
+    start = source.index(start_marker)
+    end = source.index(f"\nstatic {map_name}:", start)
+    section = source[start:end]
+    pattern = re.compile(
+        r"pub const ([A-Z0-9_]+): Tag\s*=\s*\(\s*&\[(.*?)\]\s*,\s*&\[(.*?)\]\s*,?\s*\);",
+        re.DOTALL,
+    )
+    constants = {
+        match.group(1): [int(value) for value in re.findall(r"(\d+)u16", match.group(3))]
+        for match in pattern.finditer(section)
+    }
+    if not constants:
+        raise SystemExit(f"no tag constants parsed for {module}")
+    return constants
+
+
+def parse_map(source: str, module: str, map_name: str) -> list[tuple[str, str]]:
+    match = re.search(
+        rf"static {map_name}:.*?phf::phf_map! \{{(.*?)\}};", source, re.DOTALL
+    )
+    if not match:
+        raise SystemExit(f"tag map not found: {map_name}")
+    section = match.group(1)
+    entries = re.findall(
+        rf'"((?:\\.|[^"\\])*)"\s*=>\s*&\s*{module}\s*::\s*([A-Z0-9_]+)', section
+    )
+    if len(entries) != section.count("=>"):
+        raise SystemExit(
+            f"parsed {len(entries)} of {section.count('=>')} entries from {map_name}"
+        )
+    return [(json.loads(f'"{name}"'), constant) for name, constant in entries]
+
+
+def parse_tags(source: str) -> list[tuple[str, list[tuple[str, list[int]]]]]:
+    registries = []
+    for registry, module, map_name in NETWORK_KEYS:
+        if module is None or map_name is None:
+            registries.append((f"minecraft:{registry}", []))
+            continue
+        constants = parse_constants(source, module, map_name)
+        tags = []
+        for name, constant in parse_map(source, module, map_name):
+            if constant not in constants:
+                raise SystemExit(f"{map_name} references missing constant {module}::{constant}")
+            tags.append((name, constants[constant]))
+        registries.append((f"minecraft:{registry}", tags))
+    return registries
+
+
+def varint(value: int) -> bytes:
+    if value < 0:
+        raise ValueError("tag payload VarInts must be non-negative")
+    output = bytearray()
+    while True:
+        if value & ~0x7F == 0:
+            output.append(value)
+            return bytes(output)
+        output.append((value & 0x7F) | 0x80)
+        value >>= 7
+
+
+def string(value: str) -> bytes:
+    encoded = value.encode("utf-8")
+    return varint(len(encoded)) + encoded
+
+
+def encode_tags(registries: list[tuple[str, list[tuple[str, list[int]]]]]) -> bytes:
+    output = bytearray(varint(len(registries)))
+    for registry, tags in registries:
+        output.extend(string(registry))
+        output.extend(varint(len(tags)))
+        for name, entries in tags:
+            output.extend(string(name))
+            output.extend(varint(len(entries)))
+            for entry in entries:
+                output.extend(varint(entry))
+    return bytes(output)
+
+
+def generate_rust(registries: list[tuple[str, list[tuple[str, list[int]]]]]) -> str:
+    tag_count = sum(len(tags) for _, tags in registries)
+    entry_count = sum(len(entries) for _, tags in registries for _, entries in tags)
+    lines = [
+        "// Generated by tools/pumpkin-import/import_tags.py. Do not edit.",
+        f"// Pumpkin {PUMPKIN_REVISION}, Minecraft 26.2.",
+        "",
+        "#[cfg(test)]",
+        "pub struct TagRegistrySummary {",
+        "    pub id: &'static str,",
+        "    pub tag_count: usize,",
+        "}",
+        "",
+        'pub const TAG_DATA: &[u8] = include_bytes!("vanilla_tags.bin");',
+        "#[cfg(test)]",
+        f"pub const TAG_COUNT: usize = {tag_count};",
+        "#[cfg(test)]",
+        f"pub const TAG_ENTRY_COUNT: usize = {entry_count};",
+        "",
+        "#[cfg(test)]",
+        "pub static TAG_REGISTRIES: &[TagRegistrySummary] = &[",
+    ]
+    for registry, tags in registries:
+        lines.append(
+            f'    TagRegistrySummary {{ id: "{registry}", tag_count: {len(tags)} }},'
+        )
+    lines.extend(
+        [
+            "];",
+            "",
+            "#[cfg(test)]",
+            "mod tests {",
+            "    use super::*;",
+            "    use net_ws::Decoder;",
+            "",
+            "    #[test]",
+            "    fn pumpkin_26_2_tag_blob_is_complete() {",
+            "        let mut decoder = Decoder::new(TAG_DATA);",
+            "        assert_eq!(decoder.varint(), Ok(TAG_REGISTRIES.len() as i32));",
+            "        let mut tag_count = 0;",
+            "        let mut entry_count = 0;",
+            "        let mut required = [false; 3];",
+            "        for expected in TAG_REGISTRIES {",
+            "            assert_eq!(decoder.string().as_deref(), Ok(expected.id));",
+            "            let count = decoder.varint().unwrap() as usize;",
+            "            assert_eq!(count, expected.tag_count);",
+            "            tag_count += count;",
+            "            for _ in 0..count {",
+            "                let name = decoder.string().unwrap();",
+            '                required[0] |= name == "minecraft:infiniburn_overworld";',
+            '                required[1] |= name == "minecraft:enchantable/armor";',
+            '                required[2] |= name == "minecraft:sulfur_cube_archetype/regular";',
+            "                let values = decoder.varint().unwrap() as usize;",
+            "                entry_count += values;",
+            "                for _ in 0..values {",
+            "                    assert!(decoder.varint().unwrap() >= 0);",
+            "                }",
+            "            }",
+            "        }",
+            "        assert_eq!(tag_count, TAG_COUNT);",
+            "        assert_eq!(entry_count, TAG_ENTRY_COUNT);",
+            "        assert!(required.into_iter().all(|value| value));",
+            "        assert!(decoder.is_empty());",
+            "    }",
+            "}",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("pumpkin", type=Path, help="path to the pinned Pumpkin checkout")
+    parser.add_argument(
+        "--rust-output", type=Path, default=Path("crates/server-do/src/vanilla_tags.rs")
+    )
+    parser.add_argument(
+        "--blob-output", type=Path, default=Path("crates/server-do/src/vanilla_tags.bin")
+    )
+    parser.add_argument(
+        "--manifest-output",
+        type=Path,
+        default=Path("crates/server-do/tags-26.2-manifest.json"),
+    )
+    args = parser.parse_args()
+
+    pumpkin = args.pumpkin.resolve()
+    revision = checked_revision(pumpkin)
+    source_path = pumpkin / "crates" / "pumpkin-data" / "src" / "generated" / "tag.rs"
+    source_bytes = source_path.read_bytes()
+    registries = parse_tags(source_bytes.decode())
+    payload = encode_tags(registries)
+
+    args.rust_output.parent.mkdir(parents=True, exist_ok=True)
+    args.rust_output.write_text(generate_rust(registries))
+    args.blob_output.parent.mkdir(parents=True, exist_ok=True)
+    args.blob_output.write_bytes(payload)
+
+    manifest = {
+        "format": 1,
+        "minecraft_version": "26.2",
+        "pumpkin_revision": revision,
+        "pumpkin_version": PUMPKIN_VERSION,
+        "source": "crates/pumpkin-data/src/generated/tag.rs",
+        "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+        "blob_sha256": hashlib.sha256(payload).hexdigest(),
+        "blob_size": len(payload),
+        "registry_count": len(registries),
+        "tag_count": sum(len(tags) for _, tags in registries),
+        "entry_reference_count": sum(
+            len(entries) for _, tags in registries for _, entries in tags
+        ),
+        "registries": [
+            {
+                "id": registry,
+                "tag_count": len(tags),
+                "entry_reference_count": sum(len(entries) for _, entries in tags),
+            }
+            for registry, tags in registries
+        ],
+    }
+    args.manifest_output.parent.mkdir(parents=True, exist_ok=True)
+    args.manifest_output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+
+if __name__ == "__main__":
+    main()

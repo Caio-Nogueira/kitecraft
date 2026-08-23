@@ -1,0 +1,13 @@
+{
+  "block_count": 1196,
+  "block_state_count": 32366,
+  "collision_reference_count": 59825,
+  "collision_shape_count": 683,
+  "format": 1,
+  "item_index_count": 1536,
+  "minecraft_version": "26.2",
+  "pumpkin_revision": "beb6947dfc21a1a781523bf207a3c2740f4928f9",
+  "pumpkin_version": "0.1.0-dev+26.2-26.40",
+  "source": "assets/blocks.json",
+  "source_sha256": "f4071273f8265f5498a7defb212103551539b1c46a509e9ed8d735441617ddca"
+}

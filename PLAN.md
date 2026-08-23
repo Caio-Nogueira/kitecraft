@@ -13,6 +13,7 @@ Durable Objects for stateful game logic and WebSocket transport via [wsmc]
 - **Topology**: one Durable Object = one server instance (`idFromName("primary")`).
 - **Platform**: Workers Paid required (free tier's 10 ms CPU/invocation cannot
   sustain gameplay bursts; paid gives 30 s CPU per invocation by default).
+- **License**: GPL-3.0-only, matching the pinned Pumpkin 26.2 upstream.
 
 ## Architecture
 
@@ -26,14 +27,15 @@ so offline-mode encryption is skipped; zlib compression via flate2 (sync).
 **Open item**: confirm against wsmc source whether messages include the VarInt
 length prefix, and where compression sits relative to framing.
 
-### Execution model — no fixed-rate tick loop
+### Execution model — player-scoped fixed-rate tick loop
 
 DO alarms are not a clock (no sub-second delivery guarantee, at-least-once +
 2 s retry backoff, every reschedule is a durable storage write). Instead:
 
 | Concern | Mechanism |
 |---|---|
-| Movement / chat / block events | inline per `websocket_message`, single-threaded DO serializes |
+| Movement / block / attack events | validated semantic inputs queued for the 20 TPS core |
+| Chat / protocol-only events | inline per `websocket_message` |
 | World time / daylight | derived arithmetically: `age = base + (now − base_wallclock)/50` |
 | Time Update packet | vanilla expects every 20 ticks = 1 s → 1 Hz alarm |
 | Keep Alive (~10–15 s) | same alarm |
@@ -43,10 +45,15 @@ DO alarms are not a clock (no sub-second delivery guarantee, at-least-once +
 chunks, LRU sweep, and if zero sockets remain → final flush → `deleteAlarm()` →
 full hibernation eligibility (zero cost while idle-connected).
 
-All gameplay mutation goes behind a `World::advance(to_timestamp)` boundary from
-day one so a fixed-step simulator can slot in later (mobs/redstone) via either:
-a `setInterval(50ms)` loop armed while sockets exist (blocks hibernation — fine,
-active sim implies players online), or event-sliced catch-up steps.
+Gameplay runs through a deterministic input → tick → effect core. A 50 ms timer
+is armed while players exist, with bounded catch-up after late callbacks. The
+loop stops after the last player leaves; alarms remain responsible for periodic
+maintenance and durability. Player positions are finite/bounds/delta checked,
+swept through Pumpkin-derived block collision shapes, and corrected only to the
+actor when the submitted state is invalid or intersects the world.
+Attacks use the same ordered input stream: target identity, hitbox reach, world
+occlusion, recharge, hurt protection, health, and knockback are deterministic
+core state; server-do only translates successful effects to protocol packets.
 
 ### Session lifecycle
 
@@ -68,10 +75,11 @@ capped ~64 MB (128 MB isolate limit).
 
 | Upstream crate | Disposition |
 |---|---|
-| pumpkin-nbt / util / data | use as-is (fork-pinned); patch Cargo.toml tokio features |
+| pumpkin-data | compact pinned generated tables; exclude native-only dependency graph |
+| pumpkin-nbt / util | import incrementally behind WASM-safe feature gates when needed |
 | pumpkin-protocol | packet defs + ser/de only; skip AsyncRead/Write codec layer |
 | pumpkin-config | struct defs; load from embedded defaults/env/KV |
-| pumpkin-world | Phase 4: lift noise/worldgen (pure compute, strip rayon) |
+| pumpkin-world | First density-only slice lifted into WASM-safe `worldgen-core`; later systems remain incremental |
 | rest of Pumpkin | not carried over (bedrock, plugins, query/rcon/console) |
 
 ## Workspace layout
@@ -79,10 +87,13 @@ capped ~64 MB (128 MB isolate limit).
 ```
 kitecraft/
 ├── crates/
+│   ├── block-data/    # compact pinned Pumpkin block/state/item/shape tables
+│   ├── game-core/     # deterministic inputs, ticks, collision, and effects
 │   ├── server-do/     # workers-rs entry + MinecraftServer DO (fetch/websocket_*/alarm)
 │   ├── net-ws/        # wsmc framing adapter: WS msg ↔ packet Bytes, sink/source traits
-│   └── world/         # ChunkStore trait + DO-SQLite impl, LRU cache, superflat gen
-└── vendor/pumpkin/    # pinned fork with wasm-safe feature gates
+│   ├── world/         # generator/backing traits, DO-SQLite impl, LRU, superflat fallback
+│   └── worldgen-core/ # pinned Pumpkin seed/noise/density, stone-air occupancy
+└── tools/pumpkin-import/ # reproducible import from the pinned Pumpkin revision
 ```
 
 Target: wasm32-unknown-unknown via workers-rs (`#[durable_object]`, hibernation
@@ -98,8 +109,9 @@ API merged upstream).
    distance → movement sync → chat → persisted block break/place.
 3. **Robustness**: idle shutdown/hibernate, autosave batching, LRU eviction,
    multi-player soak test under `wrangler dev`.
-4. **Stretch**: pumpkin-world noise worldgen, player persistence across restarts,
-   HTTP admin endpoint, real-time simulation loop if entities land.
+4. **Stretch**: Pumpkin density-only worldgen landed; add surface rules, biomes,
+   caves, and later stages one golden-tested system at a time. Player persistence
+   across restarts, HTTP admin endpoint, real-time simulation loop if entities land.
 
 ## Risks / constraints
 

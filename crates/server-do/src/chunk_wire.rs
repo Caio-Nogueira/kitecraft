@@ -1,8 +1,7 @@
-use net_ws::nbt::Nbt;
-use net_ws::packets::{play_chunk_data, LightPayload};
+use net_ws::packets::{play_chunk_data, HeightmapPayload, LightPayload};
 use world::chunk::{ChunkColumn, SECTIONS_PER_CHUNK, SECTION_VOLUME};
 
-const BIOME_PLAINS: i32 = 0;
+use crate::vanilla_registries::BIOME_PLAINS;
 
 fn ceil_log2(n: usize) -> u8 {
     let mut bits = 0u8;
@@ -17,13 +16,20 @@ fn ceil_log2(n: usize) -> u8 {
 pub fn encode_section_blocks(out: &mut Vec<u8>, col: &ChunkColumn, si: usize) {
     use net_ws::Encoder;
     let count = col.non_air_count(si);
-    if count == 0 {
-        return;
-    }
-    out.extend_from_slice(&count.to_le_bytes());
+    out.extend_from_slice(&count.to_be_bytes());
+    // Fluid accounting was added to chunk sections in 26.1. The current
+    // The current generators emit no fluid states yet.
+    out.extend_from_slice(&0i16.to_be_bytes());
 
-    let blocks = col.sections[si].blocks.as_ref().expect("non-empty section");
     let mut e = Encoder::new();
+    let Some(blocks) = col.sections[si].blocks.as_ref() else {
+        e.u8(0);
+        e.varint(0); // minecraft:air
+        e.u8(0);
+        e.varint(BIOME_PLAINS);
+        out.extend_from_slice(&e.into_bytes());
+        return;
+    };
     let mut palette: Vec<u16> = Vec::new();
     let mut indices = Vec::with_capacity(SECTION_VOLUME);
     for &state in blocks.iter() {
@@ -67,13 +73,14 @@ fn write_packed_longs(e: &mut net_ws::Encoder, values: &[u32], bits: u32) {
     use std::io::Write;
     let per_long = (64 / bits) as usize;
     let long_count = values.len().div_ceil(per_long);
-    e.varint(long_count as i32);
     let mut value_iter = values.iter().copied();
     for _ in 0..long_count {
         let mut acc: u64 = 0;
         for slot in 0..per_long {
             match value_iter.next() {
-                Some(v) => acc |= ((v as u64) & mask(bits)) << (u32::try_from(slot).unwrap_or(0) * bits),
+                Some(v) => {
+                    acc |= ((v as u64) & mask(bits)) << (u32::try_from(slot).unwrap_or(0) * bits)
+                }
                 None => break,
             }
         }
@@ -82,7 +89,11 @@ fn write_packed_longs(e: &mut net_ws::Encoder, values: &[u32], bits: u32) {
 }
 
 fn mask(bits: u32) -> u64 {
-    if bits >= 64 { u64::MAX } else { (1u64 << bits) - 1 }
+    if bits >= 64 {
+        u64::MAX
+    } else {
+        (1u64 << bits) - 1
+    }
 }
 
 fn column_heights(col: &ChunkColumn) -> Vec<i64> {
@@ -104,7 +115,7 @@ fn column_heights(col: &ChunkColumn) -> Vec<i64> {
     heights
 }
 
-fn pack_heightmap(heights: &[i64]) -> Nbt {
+fn pack_heightmap(heights: &[i64]) -> Vec<i64> {
     const BITS: u32 = 9;
     let per_long = (64 / BITS) as usize;
     let long_count = heights.len().div_ceil(per_long);
@@ -119,25 +130,39 @@ fn pack_heightmap(heights: &[i64]) -> Nbt {
         }
         packed.push(acc as i64);
     }
-    Nbt::LongArray(packed)
+    packed
 }
 
-pub fn heightmaps_nbt(col: &ChunkColumn) -> Nbt {
+pub fn heightmaps(col: &ChunkColumn) -> Vec<HeightmapPayload> {
     let h = column_heights(col);
-    Nbt::compound(vec![
-        ("MOTION_BLOCKING", pack_heightmap(&h)),
-        ("WORLD_SURFACE", pack_heightmap(&h)),
-    ])
+    let packed = pack_heightmap(&h);
+    vec![
+        HeightmapPayload {
+            id: 1,
+            data: packed.clone(),
+        }, // WORLD_SURFACE
+        HeightmapPayload {
+            id: 4,
+            data: packed.clone(),
+        }, // MOTION_BLOCKING
+        HeightmapPayload {
+            id: 5,
+            data: packed,
+        }, // MOTION_BLOCKING_NO_LEAVES
+    ]
 }
 
 pub fn full_sky_light() -> LightPayload {
-    let mask: i64 = (1i64 << SECTIONS_PER_CHUNK) - 1;
+    // Light bit 0 is below the world, bits 1..=24 are sections, and bit 25 is
+    // above the world.
+    let section_mask: i64 = ((1i64 << SECTIONS_PER_CHUNK) - 1) << 1;
+    let boundary_mask: i64 = 1 | (1i64 << (SECTIONS_PER_CHUNK + 1));
     let section = vec![0xFFu8; 2048];
     LightPayload {
-        sky_light_mask: vec![mask],
+        sky_light_mask: vec![section_mask],
         block_light_mask: vec![0],
-        empty_sky_light_mask: vec![0],
-        empty_block_light_mask: vec![mask],
+        empty_sky_light_mask: vec![boundary_mask],
+        empty_block_light_mask: vec![section_mask | boundary_mask],
         sky_light: vec![section.clone(); SECTIONS_PER_CHUNK],
         block_light: Vec::new(),
     }
@@ -148,7 +173,7 @@ pub fn encode_chunk_packet(x: i32, z: i32, col: &ChunkColumn) -> Vec<u8> {
     for si in 0..SECTIONS_PER_CHUNK {
         encode_section_blocks(&mut data, col, si);
     }
-    let maps = heightmaps_nbt(col);
+    let maps = heightmaps(col);
     let light = full_sky_light();
     play_chunk_data(x, z, &maps, &data, &light)
 }
@@ -165,8 +190,9 @@ mod tests {
         let mut data = Vec::new();
         encode_section_blocks(&mut data, &col, 0);
 
-        assert_eq!(&data[..2], &1024u16.to_le_bytes());
-        let mut p = 2;
+        assert_eq!(&data[..2], &1024u16.to_be_bytes());
+        assert_eq!(&data[2..4], &0i16.to_be_bytes());
+        let mut p = 4;
         assert_eq!(data[p], 4);
         p += 1;
         assert_eq!(data[p], 4);
@@ -175,52 +201,37 @@ mod tests {
             assert_eq!(data[p], expected as u8);
             p += 1;
         }
-        let longs = i32::from_be_bytes(data[p..p + 4].try_into().unwrap());
-        p += 4;
-        assert_eq!(longs, 256);
-        p += (longs as usize) * 8;
+        p += 256 * 8;
 
         assert_eq!(data[p], 0);
         p += 1;
-        assert_eq!(data[p], 0);
+        assert_eq!(data[p], BIOME_PLAINS as u8);
         p += 1;
         assert_eq!(p, data.len());
 
-        for si in 1..SECTIONS_PER_CHUNK {
-            let before = data.len();
-            encode_section_blocks(&mut data, &col, si);
-            assert_eq!(before, data.len());
-        }
+        let before = data.len();
+        encode_section_blocks(&mut data, &col, 1);
+        assert_eq!(data.len() - before, 8);
     }
 
     #[test]
     fn packed_longs_no_spanning() {
         let values: Vec<u32> = (0..4096).map(|i| i as u32 & 0xF).collect();
-        let mut out = Vec::new();
-        write_packed_longs(&mut out, &values, 4);
-        let long_count = i32::from_be_bytes(out[0..4].try_into().unwrap()) as usize;
-        assert_eq!(long_count, 4096 / 16);
-        assert_eq!(out.len(), 4 + long_count * 8);
+        let mut encoder = net_ws::Encoder::new();
+        write_packed_longs(&mut encoder, &values, 4);
+        let out = encoder.into_bytes();
+        assert_eq!(out.len(), (4096 / 16) * 8);
     }
 
     #[test]
     fn heightmaps_shape() {
         let gen = Superflat::classic();
         let col = gen.generate(0, 0);
-        match heightmaps_nbt(&col) {
-            Nbt::Compound(entries) => {
-                assert_eq!(entries.len(), 2);
-                assert_eq!(entries[0].0, "MOTION_BLOCKING");
-                match &entries[0].1 {
-                    Nbt::LongArray(v) => {
-                        assert_eq!(v.len(), 37);
-                        assert_eq!(v[0] & 0x1FF, 4);
-                    }
-                    other => panic!("unexpected {other:?}"),
-                }
-            }
-            other => panic!("unexpected {other:?}"),
-        }
+        let maps = heightmaps(&col);
+        assert_eq!(maps.len(), 3);
+        assert_eq!([maps[0].id, maps[1].id, maps[2].id], [1, 4, 5]);
+        assert_eq!(maps[0].data.len(), 37);
+        assert_eq!(maps[0].data[0] & 0x1FF, 4);
     }
 
     #[test]
@@ -228,7 +239,7 @@ mod tests {
         let gen = Superflat::classic();
         let col = gen.generate(5, -5);
         let pkt = encode_chunk_packet(5, -5, &col);
-        assert_eq!(pkt[0], 0x28);
+        assert_eq!(pkt[0], net_ws::ids::cb::PLAY_CHUNK_DATA as u8);
         assert!(pkt.len() < 60_000);
     }
 }

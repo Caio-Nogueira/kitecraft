@@ -63,6 +63,18 @@ impl Encoder {
         write_varint(&mut self.buf, v);
     }
 
+    pub fn varlong(&mut self, v: i64) {
+        let mut value = v as u64;
+        loop {
+            if value & !0x7f == 0 {
+                self.u8(value as u8);
+                return;
+            }
+            self.u8((value as u8 & 0x7f) | 0x80);
+            value >>= 7;
+        }
+    }
+
     pub fn string(&mut self, s: &str) {
         self.varint(s.len() as i32);
         self.buf.extend_from_slice(s.as_bytes());
@@ -145,7 +157,9 @@ impl<'a> Decoder<'a> {
 
     pub fn u64(&mut self) -> DecodeResult<u64> {
         let b = self.take(8)?;
-        Ok(u64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
+        Ok(u64::from_be_bytes([
+            b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+        ]))
     }
 
     pub fn i64(&mut self) -> DecodeResult<i64> {
@@ -162,6 +176,18 @@ impl<'a> Decoder<'a> {
 
     pub fn varint(&mut self) -> DecodeResult<i32> {
         read_varint(self.data, &mut self.pos)
+    }
+
+    pub fn varlong(&mut self) -> DecodeResult<i64> {
+        let mut value = 0u64;
+        for shift in (0..70).step_by(7) {
+            let byte = self.u8()?;
+            value |= u64::from(byte & 0x7f) << shift;
+            if byte & 0x80 == 0 {
+                return Ok(value as i64);
+            }
+        }
+        Err(DecodeError::Malformed("VarLong is too long"))
     }
 
     pub fn string(&mut self) -> DecodeResult<String> {
@@ -240,7 +266,12 @@ mod tests {
 
     #[test]
     fn block_pos_roundtrip() {
-        for (x, y, z) in [(0, 0, 0), (-1, -65, 1), (29_999_999, 319, -29_999_999), (100, -60, -200)] {
+        for (x, y, z) in [
+            (0, 0, 0),
+            (-1, -65, 1),
+            (29_999_999, 319, -29_999_999),
+            (100, -60, -200),
+        ] {
             let packed = pack_block_pos(x, y, z);
             assert_eq!(unpack_block_pos(packed), (x, y, z));
         }

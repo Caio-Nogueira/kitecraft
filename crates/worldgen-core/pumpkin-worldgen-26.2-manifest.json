@@ -1,0 +1,112 @@
+{
+  "format": 1,
+  "minecraft_version": "26.2",
+  "pumpkin_revision": "beb6947dfc21a1a781523bf207a3c2740f4928f9",
+  "reference_harness": {
+    "path": "tools/pumpkin-import/worldgen-reference.patch",
+    "sha256": "6775a71362fee08248ce8f3d69e76591227f26fac22aef704845c3eb9f6e5da3"
+  },
+  "sources": {
+    "crates/pumpkin-data/src/generated/noise_parameter.rs": "c39f86b0d743044a6036108602216dd18843454b921397ca69bfd5563877c79a",
+    "crates/pumpkin-data/src/generated/noise_router.rs": "0bcbe5d8c1fbae316d6e538cce4f294347f22e2412c6bea529d85889ff1b0b2f",
+    "crates/pumpkin-util/src/noise/perlin.rs": "36b810e3adce52453ba7012d59f14d0857304c5c98f1d2d105d463aafde1d225",
+    "crates/pumpkin-world/src/generation/noise/perlin.rs": "daf91d9b380b4bc0fd4216569c0aca5dc9f035df8d012fe0ce19e370f50db281"
+  },
+  "fixtures": [
+    {
+      "seed": 0,
+      "chunk_x": 0,
+      "chunk_z": 0,
+      "height": 384,
+      "layout": "x-major, then local-y, then z; bits are little-endian within each byte",
+      "coordinate_source": "assets/tests/noise_no_blend_no_beard_0_0.chunk",
+      "coordinate_source_sha256": "09d32e8301c941c5f98545ae6f3b73d33be45c7a0239c0fada54c42e22293058",
+      "reference_mode": {
+        "aquifers": false,
+        "noise_caves": false,
+        "ore_veins": false,
+        "beardifier": false,
+        "density_pipeline": "sloped_cheese + slides + blend + interpolation + squeeze",
+        "projection": "terrain_density > 0 => stone; otherwise air"
+      },
+      "occupancy": "noise_no_blend_no_beard_0_0.occupancy",
+      "occupancy_sha256": "45a889952333d75ae5cf3d2aafad2267d5b1d0e7da20f5467f03ac608a184f20"
+    },
+    {
+      "seed": 0,
+      "chunk_x": 7,
+      "chunk_z": 4,
+      "height": 384,
+      "layout": "x-major, then local-y, then z; bits are little-endian within each byte",
+      "coordinate_source": "assets/tests/noise_no_blend_no_beard_7_4.chunk",
+      "coordinate_source_sha256": "8087f0d16a3404377425bb9a39397887be6ac5b2a76757e506c380a2179aadfd",
+      "reference_mode": {
+        "aquifers": false,
+        "noise_caves": false,
+        "ore_veins": false,
+        "beardifier": false,
+        "density_pipeline": "sloped_cheese + slides + blend + interpolation + squeeze",
+        "projection": "terrain_density > 0 => stone; otherwise air"
+      },
+      "occupancy": "noise_no_blend_no_beard_7_4.occupancy",
+      "occupancy_sha256": "b86d4f377ae77c9363b4a1ce5c4e9376f80dc252fd8844c0f8a7ffffde21d12a"
+    },
+    {
+      "seed": 0,
+      "chunk_x": -595,
+      "chunk_z": 544,
+      "height": 384,
+      "layout": "x-major, then local-y, then z; bits are little-endian within each byte",
+      "coordinate_source": "assets/tests/noise_no_blend_no_beard_-595_544.chunk",
+      "coordinate_source_sha256": "5b7f42de4a13a04cc3f10366b67b42ce4d0962f97a5302eee575f9dda631b34e",
+      "reference_mode": {
+        "aquifers": false,
+        "noise_caves": false,
+        "ore_veins": false,
+        "beardifier": false,
+        "density_pipeline": "sloped_cheese + slides + blend + interpolation + squeeze",
+        "projection": "terrain_density > 0 => stone; otherwise air"
+      },
+      "occupancy": "noise_no_blend_no_beard_-595_544.occupancy",
+      "occupancy_sha256": "ead482cedc31934593e89eafaaa64ae224945f5d1439b4bfee04006a6eae3106"
+    },
+    {
+      "seed": 13579,
+      "chunk_x": -6,
+      "chunk_z": 11,
+      "height": 384,
+      "layout": "x-major, then local-y, then z; bits are little-endian within each byte",
+      "coordinate_source": "assets/tests/noise_no_blend_no_beard_13579_-6_11.chunk",
+      "coordinate_source_sha256": "0224dfc205d0c4617f3557f261c33e0f04717cf4ff3223cc5dac25a0f33a1c27",
+      "reference_mode": {
+        "aquifers": false,
+        "noise_caves": false,
+        "ore_veins": false,
+        "beardifier": false,
+        "density_pipeline": "sloped_cheese + slides + blend + interpolation + squeeze",
+        "projection": "terrain_density > 0 => stone; otherwise air"
+      },
+      "occupancy": "noise_no_blend_no_beard_13579_-6_11.occupancy",
+      "occupancy_sha256": "f5f3ccc9d53a7d5faf1b828002a2fab2bfd2659e0e101d8a9ce7ff64ce06b059"
+    },
+    {
+      "seed": 13579,
+      "chunk_x": -2,
+      "chunk_z": 15,
+      "height": 384,
+      "layout": "x-major, then local-y, then z; bits are little-endian within each byte",
+      "coordinate_source": "assets/tests/noise_no_blend_no_beard_13579_-2_15.chunk",
+      "coordinate_source_sha256": "bae712714729ab111a7fb7f7243cf25f78d064cf480ef3eb3f8b279258c0b500",
+      "reference_mode": {
+        "aquifers": false,
+        "noise_caves": false,
+        "ore_veins": false,
+        "beardifier": false,
+        "density_pipeline": "sloped_cheese + slides + blend + interpolation + squeeze",
+        "projection": "terrain_density > 0 => stone; otherwise air"
+      },
+      "occupancy": "noise_no_blend_no_beard_13579_-2_15.occupancy",
+      "occupancy_sha256": "b6926ec61c5c0dd3df0c3f6f0c5f545203649b5f9dd2c19e4d076d9e2fc78112"
+    }
+  ]
+}

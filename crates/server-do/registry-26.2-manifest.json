@@ -1,0 +1,135 @@
+{
+  "blob_sha256": "5d3263d254daacda3af14b01e51bab2af746d7091b62dfbd39a93f0d85328ad7",
+  "blob_size": 268901,
+  "format": 1,
+  "minecraft_version": "26.2",
+  "notable_indices": {
+    "minecraft:damage_type/minecraft:player_attack": 34,
+    "minecraft:dimension_type/minecraft:overworld": 0,
+    "minecraft:world_clock/minecraft:overworld": 0,
+    "minecraft:worldgen/biome/minecraft:plains": 40
+  },
+  "pumpkin_revision": "beb6947dfc21a1a781523bf207a3c2740f4928f9",
+  "pumpkin_version": "0.1.0-dev+26.2-26.40",
+  "registries": [
+    {
+      "entry_count": 66,
+      "id": "minecraft:worldgen/biome"
+    },
+    {
+      "entry_count": 8,
+      "id": "minecraft:chat_type"
+    },
+    {
+      "entry_count": 18,
+      "id": "minecraft:trim_pattern"
+    },
+    {
+      "entry_count": 11,
+      "id": "minecraft:trim_material"
+    },
+    {
+      "entry_count": 9,
+      "id": "minecraft:wolf_variant"
+    },
+    {
+      "entry_count": 7,
+      "id": "minecraft:wolf_sound_variant"
+    },
+    {
+      "entry_count": 3,
+      "id": "minecraft:pig_variant"
+    },
+    {
+      "entry_count": 3,
+      "id": "minecraft:pig_sound_variant"
+    },
+    {
+      "entry_count": 3,
+      "id": "minecraft:frog_variant"
+    },
+    {
+      "entry_count": 11,
+      "id": "minecraft:cat_variant"
+    },
+    {
+      "entry_count": 2,
+      "id": "minecraft:cat_sound_variant"
+    },
+    {
+      "entry_count": 3,
+      "id": "minecraft:cow_variant"
+    },
+    {
+      "entry_count": 2,
+      "id": "minecraft:cow_sound_variant"
+    },
+    {
+      "entry_count": 3,
+      "id": "minecraft:chicken_variant"
+    },
+    {
+      "entry_count": 2,
+      "id": "minecraft:chicken_sound_variant"
+    },
+    {
+      "entry_count": 2,
+      "id": "minecraft:zombie_nautilus_variant"
+    },
+    {
+      "entry_count": 51,
+      "id": "minecraft:painting_variant"
+    },
+    {
+      "entry_count": 4,
+      "id": "minecraft:dimension_type"
+    },
+    {
+      "entry_count": 51,
+      "id": "minecraft:damage_type"
+    },
+    {
+      "entry_count": 22,
+      "id": "minecraft:jukebox_song"
+    },
+    {
+      "entry_count": 43,
+      "id": "minecraft:banner_pattern"
+    },
+    {
+      "entry_count": 8,
+      "id": "minecraft:instrument"
+    },
+    {
+      "entry_count": 43,
+      "id": "minecraft:enchantment"
+    },
+    {
+      "entry_count": 4,
+      "id": "minecraft:timeline"
+    },
+    {
+      "entry_count": 3,
+      "id": "minecraft:dialog"
+    },
+    {
+      "entry_count": 2,
+      "id": "minecraft:world_clock"
+    },
+    {
+      "entry_count": 1,
+      "id": "minecraft:test_environment"
+    },
+    {
+      "entry_count": 1,
+      "id": "minecraft:test_instance"
+    },
+    {
+      "entry_count": 12,
+      "id": "minecraft:sulfur_cube_archetype"
+    }
+  ],
+  "registry_count": 29,
+  "source": "crates/pumpkin-data/src/generated/registry.rs",
+  "source_sha256": "8b6a38e136c016ad4bd344e22ec16221d2c4c1ac7b48df75a17d59052945b562"
+}

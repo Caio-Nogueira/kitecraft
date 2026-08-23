@@ -1,11 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/net-ws", "crates/world", "crates/server-do"]
+members = ["crates/block-data", "crates/game-core", "crates/net-ws", "crates/world", "crates/worldgen-core", "crates/server-do"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "GPL-3.0-only"
 
 [profile.release]
 opt-level = "s"
